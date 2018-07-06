@@ -1,0 +1,25 @@
+{
+  "name": "jsdl",
+  "version": "1.0.0",
+  "description": "Java Script for Deep Learning.",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhangleihuanrong/jsdl.git"
+  },
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/zhangleihuanrong/jsdl/issues"
+  },
+  "homepage": "https://github.com/zhangleihuanrong/jsdl#readme",
+  "dependencies": {
+    "ndarray": "^1.0.18"
+  }
+}
