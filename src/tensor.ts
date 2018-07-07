@@ -1,18 +1,32 @@
-import ndarray from 'ndarray';
-
-import { DataType, TensorLike } from './types';
+import { DataType, TypedArray, BackendTensor, TensorLike, isTypedArray, getShape, toTypedArray, FlatVector } from './types';
 
 
 export class Tensor {
-    //private static nextId = 0;
+    private static sNextId: number = 0;
+
     id: number;
     shape: number[];
     size: number;
     dtype: DataType;
-    values: any; // ndarray
 
-    constructor(shape?: number[], dtype?: DataType, values?: TensorLike) {
+    protected constructor(shape: number[], dtype: DataType, values?: TypedArray, backendTensor?: BackendTensor) {
+        this.id = Tensor.sNextId++;
         this.shape = shape;
-        this.values = ndarray(values, shape);
+        this.dtype = dtype;
     }
+
+    get rank() : number {
+        return this.shape.length;
+    }
+
+    static create(values: TensorLike, shape?: number[], dtype?: DataType = 'float32') : Tensor {
+        const fa: FlatVector = (!isTypedArray(values) && !Array.isArray(values)) ? 
+            ([values] as number[]): (values as FlatVector);
+
+        // TODO: Check shapes & types
+        shape = shape || getShape(fa);
+        const ta = toTypedArray(fa, dtype)
+        return new Tensor(shape, dtype, ta);
+    }
+
 }
