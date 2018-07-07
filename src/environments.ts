@@ -38,11 +38,11 @@ export class Environment {
     useBackend(name: string) {
         this.currentBackendName = name;
         const backend = this.findBackend(name);
-        this.currentEngine = new Engine(backend);
+        this.currentEngine = new TensorEngine(backend);
 
     }
 
-    get engine() : Engine {
+    get engine() : TensorEngine {
         if (this.currentEngine == null) {
             this.useBackend(this.getBestBackend());
         }
@@ -51,7 +51,9 @@ export class Environment {
 
 }
 
-function getGlobalNamespace() : { ENV: Environment }  {
+declare var global : any;
+
+function getGlobalNamespace() : { __global_TensorEnv: Environment }  {
   let ns: any;
   if (typeof (window) !== 'undefined') {
       ns = window;
@@ -65,10 +67,11 @@ function getGlobalNamespace() : { ENV: Environment }  {
   return ns;
 }
 
-function getEnvironment() : Environment {
+function getOrCreateEnvironment() : Environment {
     const ns = getGlobalNamespace();
-    ns.ENV = ns.ENV || new Environment();
-    return ns.ENV;
+    ns.__global_TensorEnv = ns.__global_TensorEnv || new Environment();
+    return ns.__global_TensorEnv;
 }
 
-export let ENV = getEnvironment();
+export let ENV = getOrCreateEnvironment();
+export let engine = ENV.engine;

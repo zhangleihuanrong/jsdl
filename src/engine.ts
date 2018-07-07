@@ -1,4 +1,4 @@
-import { TypedArray, BackendTensor } from './types';
+//import { TypedArray, BackendTensor } from './types';
 import { Tensor } from './tensor';
 import { Backend } from './backend';
 import { TensorManager } from './tensor_manager';
@@ -6,18 +6,15 @@ import { TensorManager } from './tensor_manager';
 export type ForwardFunc = (backend: Backend, save? : (t: Tensor) => Tensor) => Tensor;
 
 export class TensorEngine implements TensorManager {
+    register(t: Tensor): void {
+        throw new Error("Method not implemented.");
+    }
+    dispose(t: Tensor): void {
+        throw new Error("Method not implemented.");
+    }
     backend : Backend;
 
     constructor(backend: Backend) {
         this.backend = backend;
     }
-
-    register(t: Tensor) {
-
-    }
-
-    dispose(t: Tensor) {
-
-    }
-
 }
