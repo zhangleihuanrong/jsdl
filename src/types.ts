@@ -14,7 +14,8 @@ export interface RecursiveArray<T extends any> {
     [index: number]: T | RecursiveArray<T>;
 }
 
-export type TensorLike = TypedArray | number | RegularArray<number> | boolean | RegularArray<boolean>;
+export type StrictTensorLik = TypedArray | RecursiveArray<number> | RecursiveArray<boolean>;
+export type TensorLike = StrictTensorLik | number | boolean;
 
 export type BackendTensor = object;
 
@@ -35,6 +36,16 @@ export function getShape(val: any) : number[] {
         val = val[0];
     }
     return shape;
+}
+
+const ArrayDataInstances : object = {
+    float32: new Float32Array([1.0]), 
+    int32: new Int32Array([1]),
+    bool: new Uint8Array([0]),
+};
+    
+export function getTypedArraySample(dtype: DataType) : TypedArray {
+    return ArrayDataInstances[dtype];
 }
 
 export function toTypedArray<D extends DataType>(a: ArrayData<D>, dtype: D) : DataTypeMap[D] {

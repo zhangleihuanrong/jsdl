@@ -1,6 +1,5 @@
-import { DataType, TypedArray, BackendTensor, TensorLike, isTypedArray, getShape, toTypedArray, FlatVector } from './types';
+import { DataType, BackendTensor, TensorLike, isTypedArray, getShape, StrictTensorLik, TypedArray } from './types';
 import { ENV } from './environments';
-import * as ndarray from 'ndarray';
 
 export class Tensor {
     private static sNextId: number = 0;
@@ -8,36 +7,33 @@ export class Tensor {
     id: number;
     shape: number[];
     dtype: DataType;
-    tensor: ndarray;
     backendTensor: BackendTensor;
 
-    protected constructor(shape: number[], dtype: DataType, values: TypedArray = null, backendTensor: BackendTensor = null) {
+    size: number;
+
+
+    protected constructor(shape: number[], dtype: DataType, values: StrictTensorLik = null, backendTensor: BackendTensor = null) {
         this.id = Tensor.sNextId++;
         this.shape = shape;
         this.dtype = dtype;
-        if (values != null) {
-            this.tensor = ndarray(values, shape);
-        }
-        else {
-            this.tensor = null; // TODO
-        }
+        this.size = (shape && shape.length > 0) ? shape.reduce ((a, b) => a*b, 1) : 0;
         this.backendTensor = backendTensor;
         ENV.engine.register(this);
-        ENV.engine.backend.write(backendTensor, values);
+        ENV.engine.backend.write(this, values);
+    }
+
+    static create(values: TensorLike, shape: number[] = null, dtype: DataType = 'float32') : Tensor {
+        const sa: StrictTensorLik = 
+            (!isTypedArray(values) && !Array.isArray(values)) ? 
+            ([values] as number[]) : 
+            (values as StrictTensorLik);
+
+        // TODO: Check shapes & types...
+        shape = shape || getShape(sa);
+        return new Tensor(shape, dtype, sa);
     }
 
     get rank() : number {
         return this.shape.length;
     }
-
-    static create(values: TensorLike, shape: number[] = null, dtype: DataType = 'float32') : Tensor {
-        const fa: FlatVector = (!isTypedArray(values) && !Array.isArray(values)) ? 
-            ([values] as number[]): (values as FlatVector);
-
-        // TODO: Check shapes & types
-        shape = shape || getShape(fa);
-        const ta = toTypedArray(fa, dtype)
-        return new Tensor(shape, dtype, ta);
-    }
-
 }

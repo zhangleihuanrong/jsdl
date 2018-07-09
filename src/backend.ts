@@ -1,11 +1,11 @@
-import { BackendTensor, TypedArray } from './types';
+import { BackendTensor, TypedArray, StrictTensorLik } from './types';
 import { Tensor} from './tensor';
 import { TensorManager } from './tensor_manager';
 
 export interface Backend extends TensorManager{
-    write(bt: BackendTensor, values: TypedArray) : void;
-    read(bt: BackendTensor) : Promise<TypedArray>;
-    readSync(bt: BackendTensor) : TypedArray;
+    write(t: Tensor, values: StrictTensorLik) : void;
+    read(t: Tensor) : Promise<TypedArray>;
+    readSync(t: Tensor) : TypedArray;
 
     matMul(a : Tensor, b: Tensor, transposeA: boolean, transposeB: boolean): Tensor;
     transpose(x: Tensor, perm: number[]) : Tensor;

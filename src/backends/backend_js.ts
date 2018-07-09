@@ -1,21 +1,72 @@
+import { StrictTensorLik, TypedArray, getTypedArraySample, DataType, toTypedArray } from '../types';
+import { Tensor } from '../tensor';
 
 import { Backend } from '../backend';
 import { ENV } from '../environments';
 
-//import ndarray from 'ndarray';
-import { Tensor } from '../tensor';
+import ndarray from 'ndarray';
+//import ops from 'ndarray-ops';
+import gemm from 'ndarray-gemm';
 
-class BackendJsCpu implements Backend {
-    write(bt: object, values: Float32Array | Int32Array | Uint8Array): void {
-        throw new Error("Method not implemented.");
+class NdarrayTensor {
+    arr: ndarray;
+    constructor(arr: ndarray) { 
+        this.arr = arr;
     }
-    read(bt: object): Promise<Float32Array | Int32Array | Uint8Array> {
-        throw new Error("Method not implemented.");
+};
+
+class JsNdarrayBackend implements Backend {
+    register(t: Tensor): void {
+        if (t.backendTensor == null) {
+            const bt : NdarrayTensor = new NdarrayTensor(null);
+            t.backendTensor = bt;
+        }
     }
-    readSync(bt: object): Float32Array | Int32Array | Uint8Array {
-        throw new Error("Method not implemented.");
+
+    dispose(t: Tensor): void {
+        if (t.backendTensor) {
+            const bt = t.backendTensor as NdarrayTensor;
+            delete bt.arr;
+        }
     }
+
+    write(t: Tensor, values: StrictTensorLik): void {
+        const bt = t.backendTensor as NdarrayTensor;
+        const taSample = getTypedArraySample(t.dtype);
+        if (!values) {
+            const ta = (t.dtype == 'float32') ? new Float32Array(t.size) :
+                       (t.dtype == 'int32') ? new Int32Array(t.size) :
+                                              new Uint8Array(t.size);
+            bt.arr = ndarray(ta, t.shape);
+        }
+        else if (values instanceof Array) {
+            bt.arr = ndarray(values, t.shape);
+        }
+        else if (values.constructor == taSample.constructor) {
+            bt.arr = ndarray(values, t.shape);
+        }
+        else {
+            // TODO
+            throw new Error("Method not implemented.");
+        }
+    }
+
+    read(t: Tensor): Promise<TypedArray> {
+        return new Promise((resolve, reject) => {
+            resolve(this.readSync(t));
+        });
+    }
+
+    readSync(t: Tensor): TypedArray {
+        if (t.backendTensor) {
+            const bt = t.backendTensor as NdarrayTensor;
+            return toTypedArray(bt.arr.data, t.dtype);
+        }
+        return null;
+    }
+
     matMul(a: Tensor, b: Tensor, transposeA: boolean, transposeB: boolean): Tensor {
+        
         throw new Error("Method not implemented.");
     }
     transpose(x: Tensor, perm: number[]): Tensor {
@@ -33,14 +84,10 @@ class BackendJsCpu implements Backend {
     relu(x: Tensor): Tensor {
         throw new Error("Method not implemented.");
     }
-    register(t: Tensor): void {
-        throw new Error("Method not implemented.");
-    }
-    dispose(t: Tensor): void {
-        throw new Error("Method not implemented.");
-    }
+
 }
 
-const backendJsCpu = new BackendJsCpu() as Backend;
-
-ENV.registerBackend('JS_CPU', backendJsCpu, 1);
+const backendName: string = "JS_ndarray";
+const backendScore: number = 2;
+const backendJsNdarray = new JsNdarrayBackend() as Backend;
+ENV.registerBackend(backendName, backendJsNdarray, backendScore);

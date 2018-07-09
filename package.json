@@ -20,7 +20,9 @@
   },
   "homepage": "https://github.com/zhangleihuanrong/jsdl#readme",
   "dependencies": {
-    "ndarray": "^1.0.18"
+    "ndarray": "^1.0.18",
+    "ndarray-gemm": "^1.0.0",
+    "ndarray-ops": "^1.2.2"
   },
   "devDependencies": {
     "@types/node": "^10.5.2",

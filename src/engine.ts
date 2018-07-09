@@ -7,10 +7,10 @@ export type ForwardFunc = (backend: Backend, save? : (t: Tensor) => Tensor) => T
 
 export class TensorEngine implements TensorManager {
     register(t: Tensor): void {
-        throw new Error("Method not implemented.");
+        this.backend.register(t);
     }
     dispose(t: Tensor): void {
-        throw new Error("Method not implemented.");
+        this.backend.dispose(t);
     }
     backend : Backend;
 
