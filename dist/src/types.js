@@ -11,7 +11,7 @@ function getShape(val) {
     if (!Array.isArray(val)) {
         return [];
     }
-    var shape = [];
+    const shape = [];
     while (val instanceof Array) {
         shape.push(val.length);
         val = val[0];
@@ -19,6 +19,15 @@ function getShape(val) {
     return shape;
 }
 exports.getShape = getShape;
+const ArrayDataInstances = {
+    float32: new Float32Array([1.0]),
+    int32: new Int32Array([1]),
+    bool: new Uint8Array([0]),
+};
+function getTypedArraySample(dtype) {
+    return ArrayDataInstances[dtype];
+}
+exports.getTypedArraySample = getTypedArraySample;
 function toTypedArray(a, dtype) {
     if ((a instanceof Float32Array && dtype === 'float32') ||
         (a instanceof Int32Array && dtype === 'int32') ||
@@ -26,13 +35,13 @@ function toTypedArray(a, dtype) {
         return a;
     }
     if (Array.isArray(a)) {
-        var arr = flatten(a);
+        const arr = flatten(a);
         if (dtype === 'float32' || dtype === 'int32') {
             return new Float32Array(arr);
         }
         else if (dtype === 'bool') {
-            var bools = new Uint8Array(arr.length);
-            for (var i = 0; i < bools.length; ++i) {
+            const bools = new Uint8Array(arr.length);
+            for (let i = 0; i < bools.length; ++i) {
                 bools[i] = (Math.round(arr[i]) !== 0) ? 1 : 0;
             }
             return bools;
@@ -41,10 +50,9 @@ function toTypedArray(a, dtype) {
     throw new Error('should not arrived here!');
 }
 exports.toTypedArray = toTypedArray;
-function flatten(arr, ret) {
-    if (ret === void 0) { ret = []; }
+function flatten(arr, ret = []) {
     if (Array.isArray(arr)) {
-        for (var i = 0; i < arr.length; ++i) {
+        for (let i = 0; i < arr.length; ++i) {
             flatten(arr[i], ret);
         }
     }

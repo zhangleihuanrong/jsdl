@@ -11,9 +11,11 @@ export declare type ArrayData<D extends DataType> = DataTypeMap[D] | RegularArra
 export interface RecursiveArray<T extends any> {
     [index: number]: T | RecursiveArray<T>;
 }
-export declare type TensorLike = TypedArray | number | RegularArray<number> | boolean | RegularArray<boolean>;
+export declare type StrictTensorLike = TypedArray | RecursiveArray<number> | RecursiveArray<boolean>;
+export declare type TensorLike = StrictTensorLike | number | boolean;
 export declare type BackendTensor = object;
 export declare function isTypedArray(a: any): boolean;
 export declare function getShape(val: any): number[];
+export declare function getTypedArraySample(dtype: DataType): TypedArray;
 export declare function toTypedArray<D extends DataType>(a: ArrayData<D>, dtype: D): DataTypeMap[D];
 export declare function flatten<T extends number | boolean>(arr: T | RecursiveArray<T>, ret?: T[]): T[];

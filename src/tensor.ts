@@ -1,4 +1,4 @@
-import { DataType, BackendTensor, TensorLike, isTypedArray, getShape, StrictTensorLik, TypedArray } from './types';
+import { DataType, BackendTensor, TensorLike, isTypedArray, getShape, StrictTensorLike } from './types';
 import { ENV } from './environments';
 
 export class Tensor {
@@ -11,8 +11,7 @@ export class Tensor {
 
     size: number;
 
-
-    protected constructor(shape: number[], dtype: DataType, values: StrictTensorLik = null, backendTensor: BackendTensor = null) {
+    constructor(shape: number[], dtype: DataType, values: StrictTensorLike = null, backendTensor: BackendTensor = null) {
         this.id = Tensor.sNextId++;
         this.shape = shape;
         this.dtype = dtype;
@@ -23,10 +22,10 @@ export class Tensor {
     }
 
     static create(values: TensorLike, shape: number[] = null, dtype: DataType = 'float32') : Tensor {
-        const sa: StrictTensorLik = 
+        const sa: StrictTensorLike = 
             (!isTypedArray(values) && !Array.isArray(values)) ? 
             ([values] as number[]) : 
-            (values as StrictTensorLik);
+            (values as StrictTensorLike);
 
         // TODO: Check shapes & types...
         shape = shape || getShape(sa);

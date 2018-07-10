@@ -1,56 +1,50 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-var engine_1 = require("./engine");
-var Environment = (function () {
-    function Environment() {
+const engine_1 = require("./engine");
+class Environment {
+    constructor() {
         this.backendRegistry = {};
     }
-    Environment.prototype.registerBackend = function (name, backend, score) {
-        if (score === void 0) { score = 1; }
+    registerBackend(name, backend, score = 1) {
         if (name in this.backendRegistry) {
-            console.warn("Tensor backend '" + name + "' already registered.");
+            console.warn(`Tensor backend '${name}' already registered.`);
         }
         else {
-            this.backendRegistry[name] = { backend: backend, score: score };
+            this.backendRegistry[name] = { backend, score };
         }
-    };
-    Environment.prototype.findBackend = function (name) {
+    }
+    findBackend(name) {
         if (!(name in this.backendRegistry)) {
             return null;
         }
         return this.backendRegistry[name].backend;
-    };
-    Environment.prototype.getBestBackend = function () {
-        var bestName;
-        var highestScore = -1.0;
-        for (var name_1 in this.backendRegistry) {
-            if (this.backendRegistry[name_1].score > highestScore) {
-                bestName = name_1;
-                highestScore = this.backendRegistry[name_1].score;
+    }
+    getBestBackend() {
+        let bestName;
+        let highestScore = -1.0;
+        for (let name in this.backendRegistry) {
+            if (this.backendRegistry[name].score > highestScore) {
+                bestName = name;
+                highestScore = this.backendRegistry[name].score;
             }
         }
         return bestName;
-    };
-    Environment.prototype.useBackend = function (name) {
+    }
+    useBackend(name) {
         this.currentBackendName = name;
-        var backend = this.findBackend(name);
+        const backend = this.findBackend(name);
         this.currentEngine = new engine_1.TensorEngine(backend);
-    };
-    Object.defineProperty(Environment.prototype, "engine", {
-        get: function () {
-            if (this.currentEngine == null) {
-                this.useBackend(this.getBestBackend());
-            }
-            return this.currentEngine;
-        },
-        enumerable: true,
-        configurable: true
-    });
-    return Environment;
-}());
+    }
+    get engine() {
+        if (this.currentEngine == null) {
+            this.useBackend(this.getBestBackend());
+        }
+        return this.currentEngine;
+    }
+}
 exports.Environment = Environment;
 function getGlobalNamespace() {
-    var ns;
+    let ns;
     if (typeof (window) !== 'undefined') {
         ns = window;
     }
@@ -63,7 +57,7 @@ function getGlobalNamespace() {
     return ns;
 }
 function getOrCreateEnvironment() {
-    var ns = getGlobalNamespace();
+    const ns = getGlobalNamespace();
     ns.__global_TensorEnv = ns.__global_TensorEnv || new Environment();
     return ns.__global_TensorEnv;
 }

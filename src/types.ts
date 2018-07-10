@@ -14,8 +14,8 @@ export interface RecursiveArray<T extends any> {
     [index: number]: T | RecursiveArray<T>;
 }
 
-export type StrictTensorLik = TypedArray | RecursiveArray<number> | RecursiveArray<boolean>;
-export type TensorLike = StrictTensorLik | number | boolean;
+export type StrictTensorLike = TypedArray | RecursiveArray<number> | RecursiveArray<boolean>;
+export type TensorLike = StrictTensorLike | number | boolean;
 
 export type BackendTensor = object;
 
