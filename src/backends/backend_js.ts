@@ -1,12 +1,11 @@
 import { StrictTensorLike, TypedArray, getTypedArraySample, toTypedArray, DataType, Shape } from '../types';
 import { Tensor } from '../tensor';
-
 import { Backend } from '../backend';
 import { ENV } from '../environments';
 
-import ndarray from 'ndarray';
-import gemm from 'ndarray-gemm';
-import ops from 'ndarray-ops';
+import * as ndarray from 'ndarray';
+import * as nd_gemm from 'ndarray-gemm';
+import * as nd_ops from 'ndarray-ops';
 
 // function shapePerm(shape: number[], perm: number[]): number[] {
 //     const ps: number[] = new Array(shape.length);
@@ -27,7 +26,16 @@ class JsNdarrayBackend implements Backend {
     }
 
     tensorDtype(t: Tensor): DataType {
-        return (t.data as ndarray).dtype as DataType;
+        const arrayData = (t.data as ndarray).data;
+        if (arrayData instanceof Int32Array) {
+            return 'int32';
+        }
+        else if (arrayData instanceof Uint8Array) {
+            return 'bool'
+        } 
+        else {
+            return 'float32';
+        }
     }
 
     tensorSize(t: Tensor): number {
@@ -40,13 +48,14 @@ class JsNdarrayBackend implements Backend {
     }
 
     make(t: Tensor, dtype: DataType, shape: Shape, values: StrictTensorLike): void {
-        const taSample = getTypedArraySample(t.dtype);
+        const taSample = getTypedArraySample(dtype);
         if (!values) {
             const size = shape.reduce((a, b) => a*b, 1);
             const ta = (dtype == 'float32') ? new Float32Array(size) :
                        (dtype == 'int32') ? new Int32Array(size) :
                                               new Uint8Array(size);
-            t.data = ndarray(ta, t.shape);
+            const arr = ndarray(ta, shape);
+            t.data = arr;
         }
         else if (values instanceof Array) {
             t.data = ndarray(values, shape);
@@ -84,16 +93,33 @@ class JsNdarrayBackend implements Backend {
         return y;
     }
 
-    matMul(a: Tensor, b: Tensor, transposeA: boolean = false, transposeB: boolean = false): Tensor {
+    matMul(a: Tensor, b: Tensor, transposeA?: boolean, transposeB?: boolean): Tensor {
         const activeA = (transposeA) ? this.transpose(a, [1, 0]) : a;
         const activeB = (transposeB) ? this.transpose(b, [1, 0]) : b;
 
         const backA = (activeA.data as ndarray);
         const backB = (activeB.data as ndarray);
-        const C = new Tensor(activeB.dtype, [backA.shape[0], backB.shape[1]], null, null);
-        const backC = (C.data as ndarray).arr;
-        gemm(backC, a, b, 1, 1);
-        return C;
+        const c = new Tensor(activeB.dtype, [backA.shape[0], backB.shape[1]], null, null);
+        const backC = (c.data as ndarray);
+        nd_gemm(backC, backA, backB, 1, 0);
+        return c;
+    }
+
+    reshape(x: Tensor, newShape: Shape) : Tensor {
+        const numberOfNegs = newShape.reduce((accumulator, value) => accumulator += ((value <= 0)? 1 : 0), 0);
+        const detSize = newShape.reduce((accumulator, value) => accumulator * ((value <= 0)? 1 : value), 1);
+        const oldSize = x.shape.reduce((accumulator, value) => accumulator * value, 1);
+        const axisSize = oldSize / detSize;
+        if (numberOfNegs > 1) throw new Error('Too many axises to be flatten in reshape');
+        if (numberOfNegs == 1) {
+            if (oldSize % detSize != 0) throw new Error('Size not matching to flatten');
+        }
+        const shape = Array(newShape.length);
+        for (let i = 0; i < shape.length; ++i) {
+            shape[i] = (newShape[i] <= 0) ? axisSize : newShape[i];
+        }
+        const ta = this.readSync(x);
+        return new Tensor(this.tensorDtype(x), shape, ta);
     }
 
     add(a: Tensor, b: Tensor): Tensor {
@@ -101,7 +127,17 @@ class JsNdarrayBackend implements Backend {
         const backB = (b.data as ndarray);
         const c = new Tensor(a.dtype, a.shape);
         const backC = (c.data as ndarray);
-        ops.add(backC, backA, backB);
+        if (backA.shape.length == backB.shape.length) {
+            nd_ops.add(backC, backA, backB);
+        } else { // only support one dimension more
+            nd_ops.assign(backC, backA);
+            const flatB = (this.reshape(b, [-1])).data as ndarray;;
+            const flatC = (this.reshape(c, [backC.shape[0], -1])).data as ndarray;
+            for (let i  = 0; i < backC.shape[0]; i++) {
+                const row = flatC.low(i, 0).hi(i, flatB.size);
+                nd_ops.addeq(row, flatB);
+            }
+        }
         return c;
     }
 
@@ -109,7 +145,7 @@ class JsNdarrayBackend implements Backend {
         const backX = (x.data as ndarray);
         const y = new Tensor(x.dtype, x.shape);
         const backY = (y.data as ndarray);
-        ops.neg(backY, backX);
+        nd_ops.neg(backY, backX);
         return y;
     }
 
@@ -118,7 +154,7 @@ class JsNdarrayBackend implements Backend {
         const backB = (b.data as ndarray);
         const c = new Tensor(a.dtype, a.shape);
         const backC = (c.data as ndarray);
-        ops.multiply(backC, backA, backB);
+        nd_ops.multiply(backC, backA, backB);
         return c;
     }
 
@@ -126,7 +162,7 @@ class JsNdarrayBackend implements Backend {
         const backX = (x.data as ndarray);
         const y = new Tensor(x.dtype, x.shape);
         const backY = (y.data as ndarray);
-        ops.maxs(backY, backX, 0);
+        nd_ops.maxs(backY, backX, 0);
         return y;
     }
 }

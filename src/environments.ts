@@ -20,7 +20,8 @@ export class Environment {
 
     get engine() : TensorEngine {
         if (this.currentEngine == null) {
-            this.useBackend(this.getBestBackend());
+            const name = this.getBestBackend();
+            if (name) this.useBackend(name);
         }
         return this.currentEngine;
     }
@@ -35,7 +36,7 @@ export class Environment {
     }
 
     private getBestBackend() : string {
-        let bestName : string;
+        let bestName : string = null;
         let highestScore : number = -1.0; 
         for (let name in this.backendRegistry) {
             if (this.backendRegistry[name].score > highestScore) {
@@ -53,7 +54,7 @@ export class Environment {
     }
 }
 
-declare var global : any;
+//declare var global : any;
 
 function getGlobalNamespace() : { __global_TensorEnv: Environment }  {
   let ns: any;
@@ -75,6 +76,4 @@ function getOrCreateEnvironment() : Environment {
     return ns.__global_TensorEnv;
 }
 
-export let ENV = getOrCreateEnvironment();
-export let engine = ENV.engine;
-export let backend = engine.backend;
+export const ENV = getOrCreateEnvironment();

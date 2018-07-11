@@ -24,3 +24,17 @@ a.set(0, 0, 10000);
 ndarray_print2(a);
 ndarray_print2(b);
 
+const fa = new Float32Array(50);
+const shape = [ 5, 10];
+const c = ndarray(fa, shape);
+ndarray_print2(c);
+
+import { tf } from '../src/index';
+
+const i = tf.tensor(null, [3, 100]);
+const weight = tf.tensor(null, [100, 20]);
+const bias = tf.tensor(null, [20]);
+const linear = tf.add(tf.matMul(i, weight), bias);
+const dense = tf.relu(linear);
+
+tf.print(dense);

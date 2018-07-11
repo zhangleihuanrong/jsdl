@@ -1,4 +1,4 @@
-import { TypedArray, StrictTensorLike, DataType } from './types';
+import { TypedArray, DataType } from './types';
 import { Tensor} from './tensor';
 import { TensorManager } from './tensor_manager';
 
@@ -14,8 +14,9 @@ export interface Backend extends TensorManager{
     //read(t: Tensor) : Promise<TypedArray>;
     readSync(t: Tensor) : TypedArray;
 
+    reshape(x: Tensor, newShape: number[]) : Tensor;
     transpose(x: Tensor, perm: number[]) : Tensor;
-    matMul(a : Tensor, b: Tensor, transposeA: boolean, transposeB: boolean): Tensor;
+    matMul(a : Tensor, b: Tensor, transposeA?: boolean, transposeB?: boolean): Tensor;
 
     neg(a: Tensor): Tensor;
     add(a: Tensor, b: Tensor): Tensor;
