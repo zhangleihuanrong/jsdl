@@ -1,6 +1,8 @@
-import {Tensor} from './tensor';
+import { DataType, StrictTensorLike, Shape, BackendTensor } from './types';
+import { Tensor } from './tensor';
 
 export interface TensorManager {
-    register(t: Tensor) : void;
-    dispose(t: Tensor): void;
+    wrap(t: Tensor, dtype: DataType, shape: Shape, backendTensor: BackendTensor) : void;
+    make(t: Tensor, dtype: DataType, shape: Shape, values: StrictTensorLike) : void;
+    free(t: Tensor): void;
 }

@@ -1,24 +1,32 @@
-import { DataType, BackendTensor, TensorLike, isTypedArray, getShape, StrictTensorLike } from './types';
-import { ENV } from './environments';
+import { DataType, Shape, BackendTensor, TensorLike, isTypedArray, getShape, StrictTensorLike } from './types';
+import { engine, backend } from './environments';
 
 export class Tensor {
     private static sNextId: number = 0;
 
-    id: number;
-    shape: number[];
-    dtype: DataType;
-    backendTensor: BackendTensor;
+    readonly id: number;
+    data: BackendTensor;
 
-    size: number;
-
-    constructor(shape: number[], dtype: DataType, values: StrictTensorLike = null, backendTensor: BackendTensor = null) {
+    constructor(dtype: DataType, shape: number[], values: StrictTensorLike = null, backendTensor: BackendTensor = null) {
         this.id = Tensor.sNextId++;
-        this.shape = shape;
-        this.dtype = dtype;
-        this.size = (shape && shape.length > 0) ? shape.reduce ((a, b) => a*b, 1) : 0;
-        this.backendTensor = backendTensor;
-        ENV.engine.register(this);
-        ENV.engine.backend.write(this, values);
+        if (backendTensor) {
+            engine.wrap(this, dtype, shape, backendTensor);
+        }
+        else {
+            engine.make(this, dtype, shape, values);
+        }
+    }
+
+    get shape() : Shape {
+        return backend.tensorShape(this);
+    }
+
+    get dtype(): DataType {
+        return backend.tensorDtype(this);
+    }
+
+    get size() : number {
+        return backend.tensorSize(this);
     }
 
     static create(values: TensorLike, shape: number[] = null, dtype: DataType = 'float32') : Tensor {
@@ -29,7 +37,7 @@ export class Tensor {
 
         // TODO: Check shapes & types...
         shape = shape || getShape(sa);
-        return new Tensor(shape, dtype, sa);
+        return new Tensor(dtype, shape, dtype, sa);
     }
 
     get rank() : number {

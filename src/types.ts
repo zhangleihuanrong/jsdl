@@ -1,3 +1,4 @@
+export type Shape = number[];
 
 export interface DataTypeMap {
     float32: Float32Array;

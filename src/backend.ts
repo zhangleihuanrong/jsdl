@@ -1,10 +1,17 @@
-import { TypedArray, StrictTensorLike } from './types';
+import { TypedArray, StrictTensorLike, DataType } from './types';
 import { Tensor} from './tensor';
 import { TensorManager } from './tensor_manager';
 
 export interface Backend extends TensorManager{
-    write(t: Tensor, values: StrictTensorLike) : void;
-    read(t: Tensor) : Promise<TypedArray>;
+    // Getting basic tensor properties
+    tensorShape(t: Tensor): number[];
+    tensorDtype(t: Tensor): DataType;
+    tensorSize(t: Tensor): number;
+
+    //init(t: Tensor, initializer: (t: Tensor)=>void);
+
+    //write(t: Tensor, values: StrictTensorLike) : void;
+    //read(t: Tensor) : Promise<TypedArray>;
     readSync(t: Tensor) : TypedArray;
 
     transpose(x: Tensor, perm: number[]) : Tensor;

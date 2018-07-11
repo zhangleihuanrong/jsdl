@@ -1,20 +1,26 @@
-//import { TypedArray, BackendTensor } from './types';
 import { Tensor } from './tensor';
 import { Backend } from './backend';
 import { TensorManager } from './tensor_manager';
-
-export type ForwardFunc = (backend: Backend, save? : (t: Tensor) => Tensor) => Tensor;
+import { DataType, Shape, StrictTensorLike } from './types';
 
 export class TensorEngine implements TensorManager {
-    register(t: Tensor): void {
-        this.backend.register(t);
-    }
-    dispose(t: Tensor): void {
-        this.backend.dispose(t);
-    }
     backend : Backend;
 
     constructor(backend: Backend) {
         this.backend = backend;
+    }
+
+    wrap(t: Tensor, dtype: DataType, shape: Shape, backendTensor: object): void {
+        // engine's logic without touching backend
+        this.backend.wrap(t, dtype, shape, backendTensor);
+    }
+
+    make(t: Tensor, dtype: DataType, shape: Shape, values: StrictTensorLike): void {
+        // TODO: engine's logic without touching backend
+        this.backend.make(t, dtype, shape, values);
+    }
+
+    free(t: Tensor): void {
+        this.backend.free(t);
     }
 }

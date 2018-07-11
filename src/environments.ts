@@ -2,9 +2,9 @@ import { TensorEngine } from "./engine";
 import { Backend } from "./backend";
 
 export class Environment {
-    backendRegistry : { [name: string ] : {backend: Backend, score: number} } = {};
-    currentBackendName: string;
-    currentEngine: TensorEngine;
+    private backendRegistry : { [name: string ] : {backend: Backend, score: number} } = {};
+    private currentBackendName: string = '';
+    private currentEngine: TensorEngine = null;
 
     constructor() {
     }
@@ -18,12 +18,23 @@ export class Environment {
         }
     }
 
-    findBackend(name: string) : Backend {
+    get engine() : TensorEngine {
+        if (this.currentEngine == null) {
+            this.useBackend(this.getBestBackend());
+        }
+        return this.currentEngine;
+    }
+
+    get backendName(): string {
+        return this.currentBackendName;
+    }
+
+    private findBackend(name: string) : Backend {
         if (!(name in this.backendRegistry)) { return null; }
         return this.backendRegistry[name].backend;
     }
 
-    getBestBackend() : string {
+    private getBestBackend() : string {
         let bestName : string;
         let highestScore : number = -1.0; 
         for (let name in this.backendRegistry) {
@@ -35,20 +46,11 @@ export class Environment {
         return bestName;
     }
 
-    useBackend(name: string) {
+    private useBackend(name: string) {
         this.currentBackendName = name;
         const backend = this.findBackend(name);
         this.currentEngine = new TensorEngine(backend);
-
     }
-
-    get engine() : TensorEngine {
-        if (this.currentEngine == null) {
-            this.useBackend(this.getBestBackend());
-        }
-        return this.currentEngine;
-    }
-
 }
 
 declare var global : any;
@@ -75,3 +77,4 @@ function getOrCreateEnvironment() : Environment {
 
 export let ENV = getOrCreateEnvironment();
 export let engine = ENV.engine;
+export let backend = engine.backend;
