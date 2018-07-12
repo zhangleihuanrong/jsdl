@@ -14,8 +14,12 @@ function ndarray_print2(arr) {
         console.log("...   ", line);
     }
 }
-const a = ndarray([1, 2, 3, 2, 2, 3], [2, 3]);
+const a = ndarray(new Float32Array([1, 2, 3, 2, 2, 3]), [2, 3]);
 ndarray_print2(a);
+for (let n = 0; n < 3; ++n) {
+    const col = a.pick([null, n]);
+    console.log('colum', n, col.shape );
+}
 
 const b = a.transpose(1, 0);
 ndarray_print2(b);

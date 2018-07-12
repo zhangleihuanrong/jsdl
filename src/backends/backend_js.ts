@@ -22,6 +22,21 @@ function ndarrayOf(t: Tensor) : ndarray {
     return t.data as ndarray;
 }
 
+function nd_pad(x: ndarray, paddings: [number, number][], padVal: number = 0) : ndarray {
+    //TODO: check parameters
+    const padTotal = paddings.reduce((sum, p) => sum + p[0] + p[1], 0);
+    if (padTotal == 0) return x;
+    const newShape = x.shape.map((len, index) => len + paddings[index][0] + paddings[index][1]);
+    const padded = ndarray(x.dtype, newShape);
+    const loPoint = paddings.map(beforeAndAfter => beforeAndAfter[0]);
+    if (padVal != 0) {
+        nd_ops.addseq(padded, padVal);
+    }
+    nd_ops.assign(padded.lo(loPoint).hi(x.shape), x);
+    return padded;
+}
+
+
 
 class JsNdarrayBackend implements Backend {
     tensorShape(t: Tensor): number[] {
@@ -168,6 +183,69 @@ class JsNdarrayBackend implements Backend {
             }
         }
         return c;
+    }
+
+
+    //     if (node.opType == "Conv") {
+    //         const nameX = node.input[0];
+    //         let tensorX = predFlow.tensors[nameX];
+    //         assert(tensorX.shape.length == 4); // ensure conv2d
+    
+    //         tensorX = tf.transpose(tensorX, [0, 2, 3, 1]); // make it NHWC mode
+    
+    //         const nameW = node.input[1];
+    //         let tensorW = predFlow.tensors[nameW];
+    //         tensorW = tf.transpose(tensorW, [2, 3, 1, 0]); // make it [H, W, in, out] mode
+    
+    //         const attrs = node.attribute;
+    //         let pads = attrs.find(attr => attr.name == 'pads');
+    //         if (pads) {
+    //             pads = pads.ints.map(lv => Number(lv));
+    //             if (pads[0] != 0 || pads[1] != 0 || pads[2] != 0 || pads[3] != 0) {
+    //                 const tfpad = [[0, 0], [pads[0], pads[2]], [pads[1], pads[3]], [0, 0]];
+    //                 tensorX = tf.pad(tensorX, tfpad, 0);
+    //             }
+    //         }
+    
+    //         const strides = attrs.find(attr => attr.name == 'strides').ints.map(lv => Number(lv));
+    //         let tensorY = tf.conv2d(tensorX, tensorW, strides, 'valid', 'NHWC');
+    //         tensorY = tf.transpose(tensorY, [0, 3, 1, 2]); // make it NCHW
+    
+    //         const nameY = node.output[0];
+    //         predFlow.tensors[nameY] = tensorY;
+    //     }
+    conv2d(x: Tensor, filter: Tensor, strides: number | [number, number], padding: [number, number, number, number], dataFormat: 'NHWC' | 'NCHW', dilations: number | [number, number] = 1) : Tensor {
+        if (!(strides instanceof Array)) strides = [strides as number, strides as number];
+        if (!(dilations instanceof Array)) dilations = [dilations as number, dilations as number];
+        let ndx = ndarrayOf(x);  // 4d tensor, NHWC or NCHW
+        let ndk = ndarrayOf(filter); //[H, W, in, out] or [out, in, H, W]
+
+        if (dataFormat == 'NCHW') {
+            ndx = ndx.transpose(0, 2, 3, 1);
+            ndk = ndk.transpose(2, 3, 1, 0);
+        }
+
+        ndx = nd_pad(ndx, [[0, 0], [padding[0], padding[2]], [padding[1], padding[3]], [0, 0]]);
+
+        // calc output shape
+        const batchSize = ndx.shape[0];
+        const inputColors = ndx.shape[3];
+        const inputRows = ndx.shape[1];
+        const inputCols = ndx.shape[2];
+
+        const outChannels = ndk.shape[0];
+        const kernelIn = ndk.shape[3];
+        const kernelRows = ndx.shape[1];
+        const kernelCols = ndx.shape[2];
+
+        const dilateKernelRows = kernelRows + (kernelRows - 1) * (dilations[0] - 1);
+        const dilateKernelCols = kernelCols + (kernelCols - 1) * (dilations[1] - 1);
+
+        if (inputColors != kernelIn) throw new Error('intput channel do not match kernnels');
+        const outRows = Math.floor((inputRows - dilateKernelRows + strides[0]) / strides[0]);
+        const outCols = Math.floor((inputCols - dilateKernelCols + strides[1]) / strides[1]);
+
+        return new Tensor(null, [batchSize, outRows, outCols, outChannels]);
     }
 
     neg(x: Tensor): Tensor {

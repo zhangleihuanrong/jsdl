@@ -18,6 +18,7 @@ export interface Backend extends TensorManager{
 
     // in place random initializer. return the input tensor
 
+    conv2d(x: Tensor, filter: Tensor, strides: number | [number, number], padding: [number, number, number, number], dataFormat: 'NHWC' | 'NCHW', dialations: number | [number, number]) : Tensor;
     reshape(x: Tensor, newShape: number[]) : Tensor;
     transpose(x: Tensor, perm: number[]) : Tensor;
     matMul(a : Tensor, b: Tensor, transposeA?: boolean, transposeB?: boolean): Tensor;
