@@ -29,12 +29,26 @@ const shape = [ 5, 10];
 const c = ndarray(fa, shape);
 ndarray_print2(c);
 
+import '../src/backends/backend_js';
 import { tf } from '../src/index';
 
-const i = tf.tensor(null, [3, 100]);
-const weight = tf.tensor(null, [100, 20]);
-const bias = tf.tensor(null, [20]);
-const linear = tf.add(tf.matMul(i, weight), bias);
-const dense = tf.relu(linear);
+const i = tf.tensor(null, [3, 10]);
+tf.randomUniformEq(i, -1, 1);
+tf.print(i, 'i');
 
-tf.print(dense);
+const weight = tf.tensor(null, [10, 5]);
+tf.randomNormEq(weight, 0, 10, 10000);
+tf.print(weight, 'weight');
+
+const bias = tf.tensor(null, [5]);
+tf.randomUniformEq(bias, -1, 1);
+tf.print(tf.reshape(bias, [1, 5]), 'bias');
+
+const mul = tf.matMul(i, weight);
+tf.print(mul, 'mul');
+
+const linear = tf.add(mul, bias);
+tf.print(linear, 'linear');
+
+const dense = tf.relu(linear);
+tf.print(dense, 'dense');

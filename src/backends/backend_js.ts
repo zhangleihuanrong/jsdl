@@ -6,6 +6,7 @@ import { ENV } from '../environments';
 import * as ndarray from 'ndarray';
 import * as nd_gemm from 'ndarray-gemm';
 import * as nd_ops from 'ndarray-ops';
+import { MPRandGauss } from '../utils/rand';
 
 // function shapePerm(shape: number[], perm: number[]): number[] {
 //     const ps: number[] = new Array(shape.length);
@@ -15,12 +16,14 @@ import * as nd_ops from 'ndarray-ops';
 //     }
 //     return ps;
 // }
+//import { print as tfprint } from '../utils';
+
+function ndarrayOf(t: Tensor) : ndarray {
+    return t.data as ndarray;
+}
+
 
 class JsNdarrayBackend implements Backend {
-    ndarrayOf(t: Tensor) : ndarray {
-        return t.data as ndarray;
-    }
-
     tensorShape(t: Tensor): number[] {
         return (t.data as ndarray).shape;
     }
@@ -86,6 +89,25 @@ class JsNdarrayBackend implements Backend {
         return null;
     }
 
+
+    //suppose t is from typed array
+    randomUniformEq(t: Tensor, a: number, b: number) : void {
+        const arr = ndarrayOf(t).data as TypedArray;
+        for (let i = 0; i < arr.length; ++i) {
+            const v = Math.random() * (b - a) + a;
+            arr[i] = v;
+        }
+    }
+
+    randomNormEq(t: Tensor, mean: number, stdDev: number, seed: number) : void {
+        const dtype = t.dtype as 'float32' | 'int32';
+        const randGauss = new MPRandGauss(mean, stdDev, dtype, false, seed);
+        const arr = ndarrayOf(t).data as TypedArray;
+        for (let i = 0; i < arr.length; i++) {
+            arr[i] = randGauss.nextValue();
+        }
+    }
+
     transpose(x: Tensor, perm: number[]): Tensor {
         const bt = x.data as ndarray;
         const trans = bt.transpose(perm);
@@ -106,6 +128,7 @@ class JsNdarrayBackend implements Backend {
     }
 
     reshape(x: Tensor, newShape: Shape) : Tensor {
+        // TODO: this is not correct when x do some in place transformation like slice etc
         const numberOfNegs = newShape.reduce((accumulator, value) => accumulator += ((value <= 0)? 1 : 0), 0);
         const detSize = newShape.reduce((accumulator, value) => accumulator * ((value <= 0)? 1 : value), 1);
         const oldSize = x.shape.reduce((accumulator, value) => accumulator * value, 1);
@@ -119,7 +142,7 @@ class JsNdarrayBackend implements Backend {
             shape[i] = (newShape[i] <= 0) ? axisSize : newShape[i];
         }
         const ta = this.readSync(x);
-        return new Tensor(this.tensorDtype(x), shape, ta);
+        return new Tensor(x.dtype, shape, ta);
     }
 
     add(a: Tensor, b: Tensor): Tensor {
@@ -133,9 +156,15 @@ class JsNdarrayBackend implements Backend {
             nd_ops.assign(backC, backA);
             const flatB = (this.reshape(b, [-1])).data as ndarray;;
             const flatC = (this.reshape(c, [backC.shape[0], -1])).data as ndarray;
-            for (let i  = 0; i < backC.shape[0]; i++) {
-                const row = flatC.low(i, 0).hi(i, flatB.size);
-                nd_ops.addeq(row, flatB);
+            for (let i  = 0; i < flatC.shape[1]; i++) {
+                const col = flatC.lo(0, i).hi(flatC.shape[0], 1);
+                let res = '';
+                for (let r = 0; r < flatC.shape[0]; r++) {
+                    res += (res.length > 0) ? ', ' : '';
+                    res += '' + col.get(r, 0);
+                }
+                console.log(res);
+                nd_ops.addseq(col, flatB.get(i));
             }
         }
         return c;

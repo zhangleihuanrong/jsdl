@@ -9,10 +9,14 @@ export interface Backend extends TensorManager{
     tensorSize(t: Tensor): number;
 
     //init(t: Tensor, initializer: (t: Tensor)=>void);
+    randomUniformEq(t: Tensor, a: number, b: number) : void;
+    randomNormEq(t: Tensor, mean: number, variance: number, seed: number) : void;
 
     //write(t: Tensor, values: StrictTensorLike) : void;
     //read(t: Tensor) : Promise<TypedArray>;
     readSync(t: Tensor) : TypedArray;
+
+    // in place random initializer. return the input tensor
 
     reshape(x: Tensor, newShape: number[]) : Tensor;
     transpose(x: Tensor, perm: number[]) : Tensor;

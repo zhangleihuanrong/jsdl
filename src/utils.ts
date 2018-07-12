@@ -3,7 +3,7 @@ import * as tf from './ops';
 
 import * as ndarray from 'ndarray';
 
-function ndarray_print2d(arr, name: string = '', heading: number = 9, tailing: number = 6) {
+function ndarray_print2d(arr, name: string = '', heading: number, tailing: number) {
     console.log(`  ==shape for array ${name} is ${arr.shape}`)
     for (let y = 0; y < arr.shape[0]; ) {
         let line = "";
@@ -21,9 +21,9 @@ function ndarray_print2d(arr, name: string = '', heading: number = 9, tailing: n
     }
 }
 
-export function print(t: Tensor, heading: number = 5, tailing: number = 3) {
+export function print(t: Tensor, name: string = '', heading: number = 5, tailing: number = 3) {
     const ta = tf.readSync(t);
     const arr = ndarray(ta, t.shape);
 
-    ndarray_print2d(arr);
+    ndarray_print2d(arr, name, heading, tailing);
 }

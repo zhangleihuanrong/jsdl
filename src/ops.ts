@@ -9,7 +9,11 @@ const add = ENV.engine.backend.add;
 const multiply = ENV.engine.backend.multiply;
 const relu = ENV.engine.backend.relu;
 const readSync = ENV.engine.backend.readSync;
+const reshape = ENV.engine.backend.reshape;
+const randomNormEq = ENV.engine.backend.randomNormEq;
+const randomUniformEq = ENV.engine.backend.randomUniformEq;
+
 
 const tensor = Tensor.create;
 
-export { tensor, print, transpose, matMul, neg, add, multiply, relu, readSync };
+export { tensor, print, transpose, matMul, neg, add, multiply, relu, readSync, reshape, randomNormEq, randomUniformEq};

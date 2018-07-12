@@ -22,7 +22,8 @@
   "dependencies": {
     "ndarray": "^1.0.18",
     "ndarray-gemm": "^1.0.0",
-    "ndarray-ops": "^1.2.2"
+    "ndarray-ops": "^1.2.2",
+    "seedrandom": "^2.4.3"
   },
   "devDependencies": {
     "@types/node": "^10.5.2",
