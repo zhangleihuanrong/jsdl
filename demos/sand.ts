@@ -56,3 +56,14 @@ tf.print(linear, 'linear');
 
 const dense = tf.relu(linear);
 tf.print(dense, 'dense');
+
+const image = tf.tensor(null, [1, 3, 242, 242]);
+tf.randomUniformEq(image, -1.0, 1.0);
+
+const filter = tf.tensor(null, [128, 3, 7, 7]);
+tf.randomNormEq(filter, 0, 1, 10000);
+
+const padding = [1, 1, 1, 1];
+
+const r = tf.conv2d(image, filter, 1, padding, 'NCHW', 1);
+console.log("==== r.shape ", r.shape);

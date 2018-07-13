@@ -18,6 +18,8 @@ import { MPRandGauss } from '../utils/rand';
 // }
 //import { print as tfprint } from '../utils';
 
+const sUseRawConv2d = true;
+
 function ndarrayOf(t: Tensor) : ndarray {
     return t.data as ndarray;
 }
@@ -32,10 +34,10 @@ function nd_pad(x: ndarray, paddings: [number, number][], padVal: number = 0) : 
     if (padVal != 0) {
         nd_ops.addseq(padded, padVal);
     }
-    nd_ops.assign(padded.lo(loPoint).hi(x.shape), x);
+    const sliced = padded.lo(loPoint);//.hi(x.shape);
+    nd_ops.assign(sliced, x);
     return padded;
 }
-
 
 
 class JsNdarrayBackend implements Backend {
@@ -214,13 +216,13 @@ class JsNdarrayBackend implements Backend {
     //         const nameY = node.output[0];
     //         predFlow.tensors[nameY] = tensorY;
     //     }
-    conv2d(x: Tensor, filter: Tensor, strides: number | [number, number], padding: [number, number, number, number], dataFormat: 'NHWC' | 'NCHW', dilations: number | [number, number] = 1) : Tensor {
+    conv2d(x: Tensor, filter: Tensor, strides: number | [number, number], padding: number[], dataFormat: 'NHWC' | 'NCHW', dilations: number | [number, number] = 1) : Tensor {
         if (!(strides instanceof Array)) strides = [strides as number, strides as number];
         if (!(dilations instanceof Array)) dilations = [dilations as number, dilations as number];
         let ndx = ndarrayOf(x);  // 4d tensor, NHWC or NCHW
         let ndk = ndarrayOf(filter); //[H, W, in, out] or [out, in, H, W]
 
-        if (dataFormat == 'NCHW') {
+       if (dataFormat == 'NCHW') {
             ndx = ndx.transpose(0, 2, 3, 1);
             ndk = ndk.transpose(2, 3, 1, 0);
         }
@@ -228,25 +230,58 @@ class JsNdarrayBackend implements Backend {
         ndx = nd_pad(ndx, [[0, 0], [padding[0], padding[2]], [padding[1], padding[3]], [0, 0]]);
 
         // calc output shape
-        const batchSize = ndx.shape[0];
-        const inputColors = ndx.shape[3];
-        const inputRows = ndx.shape[1];
-        const inputCols = ndx.shape[2];
-
-        const outChannels = ndk.shape[0];
-        const kernelIn = ndk.shape[3];
-        const kernelRows = ndx.shape[1];
-        const kernelCols = ndx.shape[2];
+        const [batchSize, inputRows, inputCols, inputChannels]  = [ndx.shape[0], ndx.shape[1], ndx.shape[2], ndx.shape[3]];
+        const [outChannels, kernelRows, kernelCols, kernelIn] =  [ndx.shape[0], ndx.shape[1], ndx.shape[2], ndx.shape[3]];
 
         const dilateKernelRows = kernelRows + (kernelRows - 1) * (dilations[0] - 1);
         const dilateKernelCols = kernelCols + (kernelCols - 1) * (dilations[1] - 1);
 
-        if (inputColors != kernelIn) throw new Error('intput channel do not match kernnels');
+        if (inputChannels != kernelIn) throw new Error('intput channel do not match kernnels');
         const outRows = Math.floor((inputRows - dilateKernelRows + strides[0]) / strides[0]);
         const outCols = Math.floor((inputCols - dilateKernelCols + strides[1]) / strides[1]);
 
-        return new Tensor(null, [batchSize, outRows, outCols, outChannels]);
+        const r = new Tensor(null, [batchSize, outRows, outCols, outChannels]);
+        const ndr = ndarrayOf(r);
+
+        if (sUseRawConv2d) {
+            for (let b = 0; b < batchSize; ++b) {
+                for (let d2 = 0; d2 < outChannels; ++d2) {
+                    for (let yR = 0; yR < outRows; ++yR) {
+                        const xRCorner = yR * ndx.strides[1];
+                        for (let yC = 0; yC < outCols; ++yC) {
+                            const xCCorner = yC * ndx.strides[2];
+    
+                            let dotProd = 0;
+                            for (let wR = 0; wR < kernelRows; wR++) {
+                                const xR = xRCorner + wR * ndr.strides[1];
+    
+                                if (xR < 0 || xR >= inputRows) {
+                                    continue;
+                                }
+    
+                                for (let wC = 0; wC < kernelCols; wC++) {
+                                    const xC = xCCorner + wC * dilations[0];
+    
+                                    if (xC < 0 || xC >= inputCols) {
+                                        continue;
+                                    }
+    
+                                    for (let d1 = 0; d1 < inputChannels; ++d1) {
+                                        const pixel = ndx.get(b, xR, xC, d1);
+                                        const weight = ndk.get(wR, wC, d1, d2);
+                                        dotProd += pixel * weight;
+                                    }
+                                }
+                            }
+                            ndr.set(dotProd, b, yR, yC, d2);
+                        }
+                    }
+                }
+            }
+        }
+        return r;
     }
+
 
     neg(x: Tensor): Tensor {
         const backX = (x.data as ndarray);
