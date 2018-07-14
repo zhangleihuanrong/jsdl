@@ -1,4 +1,4 @@
-import { StrictTensorLike, TypedArray, getTypedArraySample, toTypedArray, DataType, Shape } from '../types';
+import { StrictTensorLike, createTypeArrayForShape, TypedArray, getTypedArraySample, DataType, Shape } from '../types';
 import { Tensor } from '../tensor';
 import { Backend } from '../backend';
 import { ENV } from '../environments';
@@ -8,17 +8,7 @@ import * as nd_gemm from 'ndarray-gemm';
 import * as nd_ops from 'ndarray-ops';
 import { MPRandGauss } from '../utils/rand';
 
-// function shapePerm(shape: number[], perm: number[]): number[] {
-//     const ps: number[] = new Array(shape.length);
-//     // TODO: check
-//     for (let i = 0; i < shape.length; ++i) {
-//         ps[i] = shape[perm[i]];
-//     }
-//     return ps;
-// }
-//import { print as tfprint } from '../utils';
-
-const sUseRawConv2d = false;
+const sUseRawConv2d = true;
 
 function ndarrayOf(t: Tensor) : ndarray {
     return t.data as ndarray;
@@ -94,19 +84,18 @@ class JsNdarrayBackend implements Backend {
         delete t.data;
     }
 
-    // read(t: Tensor): Promise<TypedArray> {
-    //     return new Promise((resolve, reject) => {
-    //         resolve(this.readSync(t));
-    //     });
-    // }
-
-    readSync(t: Tensor): TypedArray {
-        if (t.data) {
-            return toTypedArray((t.data as ndarray).data, t.dtype);
+    readSync(x: Tensor): TypedArray {
+        if (x.data) {
+            const ndx = ndarrayOf(x);
+            const shape = ndx.shape;
+            const dtype = x.dtype;
+            const ta = createTypeArrayForShape(dtype, shape);
+            const r = ndarray(ta, shape);
+            nd_ops.assign(r, ndx);
+            return ta;
         }
         return null;
     }
-
 
     //suppose t is from typed array
     randomUniformEq(t: Tensor, a: number, b: number) : void {
@@ -128,7 +117,7 @@ class JsNdarrayBackend implements Backend {
 
     transpose(x: Tensor, perm: number[]): Tensor {
         const bt = ndarrayOf(x);
-        const trans = bt.transpose(perm);
+        const trans = bt.transpose(...perm);
         const y = new Tensor(x.dtype, trans.shape, null, trans);
         return y;
     }
@@ -246,7 +235,7 @@ class JsNdarrayBackend implements Backend {
                                     }
                                 }
                             }
-                            ndr.set(dotProd, b, yR, yC, d2);
+                            ndr.set(b, yR, yC, d2, dotProd);
                         }
                     }
                 }
@@ -290,6 +279,7 @@ class JsNdarrayBackend implements Backend {
             let ndr = ndarray(resultTypedArray, [numberOfPatches, outChannels]);
             nd_gemm(ndr, colImage, ndf, 1, 1);
         }
+
         const r = new Tensor('float32', [batchSize, outRows, outCols, outChannels], resultTypedArray);
         return r;
     }

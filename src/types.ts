@@ -49,6 +49,25 @@ export function getTypedArraySample(dtype: DataType) : TypedArray {
     return ArrayDataInstances[dtype];
 }
 
+export function createTypedArray<D extends DataType>(dtype: D, len: number) : DataTypeMap[D] {
+    if (dtype === 'float32') {
+        return new Float32Array(len);
+    }
+    else if (dtype === 'int32') {
+        return new Int32Array(len);
+    }
+    else if (dtype === 'bool') {
+        return new Uint8Array(len);
+    }
+
+    throw new Error('Unsupported type:' + dtype);
+}
+
+export function createTypeArrayForShape<D extends DataType>(dtype: D, shape: number[]) : DataTypeMap[D] {
+    const len = shape.reduce((m, v) => m * v, 1);
+    return createTypedArray(dtype, len);
+}
+
 export function toTypedArray<D extends DataType>(a: ArrayData<D>, dtype: D) : DataTypeMap[D] {
     if ((a instanceof Float32Array && dtype === 'float32') ||
         (a instanceof Int32Array && dtype === 'int32') ||
