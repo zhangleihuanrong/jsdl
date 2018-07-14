@@ -18,7 +18,7 @@ import { MPRandGauss } from '../utils/rand';
 // }
 //import { print as tfprint } from '../utils';
 
-const sUseRawConv2d = true;
+const sUseRawConv2d = false;
 
 function ndarrayOf(t: Tensor) : ndarray {
     return t.data as ndarray;
@@ -29,12 +29,13 @@ function nd_pad(x: ndarray, paddings: [number, number][], padVal: number = 0) : 
     const padTotal = paddings.reduce((sum, p) => sum + p[0] + p[1], 0);
     if (padTotal == 0) return x;
     const newShape = x.shape.map((len, index) => len + paddings[index][0] + paddings[index][1]);
-    const padded = ndarray(x.dtype, newShape);
+    const newSize = newShape.reduce((mul, v) => mul * v, 1);
+    const padded = ndarray(new Float32Array(newSize), newShape);
     const loPoint = paddings.map(beforeAndAfter => beforeAndAfter[0]);
     if (padVal != 0) {
         nd_ops.addseq(padded, padVal);
     }
-    const sliced = padded.lo(loPoint);//.hi(x.shape);
+    const sliced = padded.lo(...loPoint).hi(...x.shape);
     nd_ops.assign(sliced, x);
     return padded;
 }
@@ -71,9 +72,9 @@ class JsNdarrayBackend implements Backend {
         const taSample = getTypedArraySample(dtype);
         if (!values) {
             const size = shape.reduce((a, b) => a*b, 1);
-            const ta = (dtype == 'float32') ? new Float32Array(size) :
-                       (dtype == 'int32') ? new Int32Array(size) :
-                                              new Uint8Array(size);
+            const ta = (dtype == 'int32') ? new Int32Array(size) :
+                       (dtype != 'float32') ? new Uint8Array(size) :
+                                              new Float32Array(size);
             const arr = ndarray(ta, shape);
             t.data = arr;
         }
@@ -126,9 +127,9 @@ class JsNdarrayBackend implements Backend {
     }
 
     transpose(x: Tensor, perm: number[]): Tensor {
-        const bt = x.data as ndarray;
+        const bt = ndarrayOf(x);
         const trans = bt.transpose(perm);
-        const y = new Tensor(x.dtype, trans.shape, null, new ndarray(trans));
+        const y = new Tensor(x.dtype, trans.shape, null, trans);
         return y;
     }
 
@@ -187,35 +188,6 @@ class JsNdarrayBackend implements Backend {
         return c;
     }
 
-
-    //     if (node.opType == "Conv") {
-    //         const nameX = node.input[0];
-    //         let tensorX = predFlow.tensors[nameX];
-    //         assert(tensorX.shape.length == 4); // ensure conv2d
-    
-    //         tensorX = tf.transpose(tensorX, [0, 2, 3, 1]); // make it NHWC mode
-    
-    //         const nameW = node.input[1];
-    //         let tensorW = predFlow.tensors[nameW];
-    //         tensorW = tf.transpose(tensorW, [2, 3, 1, 0]); // make it [H, W, in, out] mode
-    
-    //         const attrs = node.attribute;
-    //         let pads = attrs.find(attr => attr.name == 'pads');
-    //         if (pads) {
-    //             pads = pads.ints.map(lv => Number(lv));
-    //             if (pads[0] != 0 || pads[1] != 0 || pads[2] != 0 || pads[3] != 0) {
-    //                 const tfpad = [[0, 0], [pads[0], pads[2]], [pads[1], pads[3]], [0, 0]];
-    //                 tensorX = tf.pad(tensorX, tfpad, 0);
-    //             }
-    //         }
-    
-    //         const strides = attrs.find(attr => attr.name == 'strides').ints.map(lv => Number(lv));
-    //         let tensorY = tf.conv2d(tensorX, tensorW, strides, 'valid', 'NHWC');
-    //         tensorY = tf.transpose(tensorY, [0, 3, 1, 2]); // make it NCHW
-    
-    //         const nameY = node.output[0];
-    //         predFlow.tensors[nameY] = tensorY;
-    //     }
     conv2d(x: Tensor, filter: Tensor, strides: number | [number, number], padding: number[], dataFormat: 'NHWC' | 'NCHW', dilations: number | [number, number] = 1) : Tensor {
         if (!(strides instanceof Array)) strides = [strides as number, strides as number];
         if (!(dilations instanceof Array)) dilations = [dilations as number, dilations as number];
@@ -231,7 +203,7 @@ class JsNdarrayBackend implements Backend {
 
         // calc output shape
         const [batchSize, inputRows, inputCols, inputChannels]  = [ndx.shape[0], ndx.shape[1], ndx.shape[2], ndx.shape[3]];
-        const [outChannels, kernelRows, kernelCols, kernelIn] =  [ndx.shape[0], ndx.shape[1], ndx.shape[2], ndx.shape[3]];
+        const [kernelRows, kernelCols, kernelIn, outChannels] =  [ndk.shape[0], ndk.shape[1], ndk.shape[2], ndk.shape[3]];
 
         const dilateKernelRows = kernelRows + (kernelRows - 1) * (dilations[0] - 1);
         const dilateKernelCols = kernelCols + (kernelCols - 1) * (dilations[1] - 1);
@@ -240,27 +212,28 @@ class JsNdarrayBackend implements Backend {
         const outRows = Math.floor((inputRows - dilateKernelRows + strides[0]) / strides[0]);
         const outCols = Math.floor((inputCols - dilateKernelCols + strides[1]) / strides[1]);
 
-        const r = new Tensor(null, [batchSize, outRows, outCols, outChannels]);
-        const ndr = ndarrayOf(r);
+        const outSize = batchSize * outRows * outCols * outChannels;
+        const resultTypedArray = new Float32Array(outSize); 
 
         if (sUseRawConv2d) {
+            let ndr = ndarray(resultTypedArray, [batchSize, outRows, outCols, outChannels])
             for (let b = 0; b < batchSize; ++b) {
                 for (let d2 = 0; d2 < outChannels; ++d2) {
                     for (let yR = 0; yR < outRows; ++yR) {
-                        const xRCorner = yR * ndx.strides[1];
+                        const xRCorner = yR * strides[0];
                         for (let yC = 0; yC < outCols; ++yC) {
-                            const xCCorner = yC * ndx.strides[2];
+                            const xCCorner = yC * strides[1];
     
                             let dotProd = 0;
                             for (let wR = 0; wR < kernelRows; wR++) {
-                                const xR = xRCorner + wR * ndr.strides[1];
+                                const xR = xRCorner + wR * dilations[0];
     
                                 if (xR < 0 || xR >= inputRows) {
                                     continue;
                                 }
     
                                 for (let wC = 0; wC < kernelCols; wC++) {
-                                    const xC = xCCorner + wC * dilations[0];
+                                    const xC = xCCorner + wC * dilations[1];
     
                                     if (xC < 0 || xC >= inputCols) {
                                         continue;
@@ -279,6 +252,45 @@ class JsNdarrayBackend implements Backend {
                 }
             }
         }
+        else {
+            // prepare the col image
+            const numberOfPatches = batchSize * outRows * outCols;
+            const sizeOfPatch = kernelRows * kernelCols * inputChannels;
+            const patch = ndarray(new Float32Array(sizeOfPatch), [kernelRows, kernelCols, inputChannels]);
+            let colImage : ndarray = null;
+            if (dilateKernelRows == 1 && dilateKernelCols == 1 && strides[0] == 1 && strides[1] == 1) {
+                colImage = ndarray(ndx.data, [numberOfPatches, sizeOfPatch]);  // infact a reshape
+            }
+            else {
+                colImage = ndarray(new Float32Array(numberOfPatches * sizeOfPatch), [numberOfPatches, sizeOfPatch]);
+                let offset = 0;
+                for (let b = 0; b < batchSize; ++b) {
+                    for (let r = 0, rMax = inputRows - dilateKernelRows + 1; r < rMax; r += dilateKernelRows) {
+                        for (let c = 0, cMax = inputCols - dilateKernelCols + 1; c < cMax; c += dilateKernelCols) {
+                            let patchView = ndx.pick(b, null, null, null);
+                            patchView = patchView.hi(r + dilateKernelRows, c + dilateKernelCols, inputChannels);
+                            patchView = patchView.lo(r, c, 0);
+                            patchView = patchView.step(dilations[0], dilations[1], 1);
+                            nd_ops.assign(patch, patchView);
+                            colImage.data.set(patch.data, offset);
+                            offset += sizeOfPatch;
+                        }
+                    }
+                }
+            }
+
+            // prepare the col image
+            const ndf = ndarray(new Float32Array(sizeOfPatch * outChannels), [sizeOfPatch, outChannels]);
+            for (let ch = 0; ch < outChannels; ++ch) {
+                nd_ops.assign(patch, ndk.pick(null, null, null, ch));
+                const reshaped = ndarray(patch.data, [sizeOfPatch]);
+                nd_ops.assign(ndf.pick(null, ch), reshaped);
+            }
+            
+            let ndr = ndarray(resultTypedArray, [numberOfPatches, outChannels]);
+            nd_gemm(ndr, colImage, ndf, 1, 1);
+        }
+        const r = new Tensor('float32', [batchSize, outRows, outCols, outChannels], resultTypedArray);
         return r;
     }
 
