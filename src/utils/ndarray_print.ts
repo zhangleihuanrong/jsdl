@@ -32,7 +32,7 @@ function printNdarrayRecursive(
         for (loc[r] = 0; loc[r] < shape[r]; ) {
             if (excludes && loc[r] == excludes[r][0] && loc[r] < exRight) {
                 line += ' ... ';
-                loc[r] = exRight; 
+                loc[r] = exRight - 1; 
             }
             else {
                 const v = nda.get(...loc);

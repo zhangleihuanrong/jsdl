@@ -46,13 +46,13 @@ function testConv2D(
     strides: [number, number], 
     dilations: [number, number]
 ) {
-    image.name = 'image${image.id}';
+    image.name = `image${image.id}`;
     tf.print(image, tpo);
 
-    filter.name = 'filter${filter.id}';
+    filter.name = `filter${filter.id}`;
     tf.print(filter, tpo);
         
-    goldenResult.name = 'GoldConv2DResult${goldenResult.id}';
+    goldenResult.name = `GoldConv2DResult${goldenResult.id}`;
     tf.print(goldenResult, tpo);
         
     let r: Tensor = null;
@@ -67,16 +67,16 @@ function testConv2D(
     
     const millis = Date.now() - start;
     const avgMillis = millis / rounds;
-    console.log(`  --Total: ${millis}ms, avg:${avgMillis}ms`);
     
     r = tf.transpose(r, [0, 3, 1, 2]);
     r.name = `Conv2dResult${r.id}`;
     tf.print(r, tpo);
-    
+ 
+    console.log(`  --Total: ${millis}ms, avg:${avgMillis}ms`);
+ 
     if (!arraysEqual(goldenResult.shape, r.shape)) {
         throw new Error('Not same shape, gold:' + JSON.stringify(goldenResult.shape) + " .vs. target:" + JSON.stringify(r.shape));
     }
-    
     
     // TODO: add tensor iteration interface
     // currently hacked with ndarray
@@ -116,11 +116,30 @@ const golda = [
   2.0, -1.5
 ];
 
+const goldb = [ // for padding [1,1,1,1]
+    -0.5, +1.0, +0.0, 
+    +1.0, +0.5, +1.0,
+    +0.0, -1.0, +0.0,
+  
+    +0.0, +0.5, +1.0,
+    +0.5, +1.5, -0.5,
+    +1.0, -1.0, +0.0
+];
+  
 testConv2D(
     new Tensor('float32', [1, 1, 4, 4], ima),
     new Tensor('float32', [2, 1, 2, 2], flta),
     new Tensor('float32', [1, 2, 2, 2], golda),
     [0, 0, 0, 0],
+    [2, 2],
+    [1, 1]
+);
+
+testConv2D(
+    new Tensor('float32', [1, 1, 4, 4], ima),
+    new Tensor('float32', [2, 1, 2, 2], flta),
+    new Tensor('float32', [1, 2, 3, 3], goldb),
+    [1, 1, 1, 1],
     [2, 2],
     [1, 1]
 );

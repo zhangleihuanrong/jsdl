@@ -9,7 +9,7 @@ import * as nd_ops from 'ndarray-ops';
 import { MPRandGauss } from '../utils/rand';
 import { printNdarray, iterateNdarray } from '../utils/ndarray_print';
 
-const sUseRawConv2d = false;
+const sUseRawConv2d = true;
 
 function ndarrayOf(t: Tensor) : ndarray {
     return t.data as ndarray;
@@ -212,7 +212,7 @@ class JsNdarrayBackend implements Backend {
         ndx = nd_pad(ndx, [[0, 0], [padding[0], padding[2]], [padding[1], padding[3]], [0, 0]]);
 
         // calc output shape
-        const [batchSize, inputRows, inputCols, inputChannels]  = [ndx.shape[0], ndx.shape[1], ndx.shape[2], ndx.shape[3]];
+        const [batchSize, inputRows, inputCols, inputChannels] = [ndx.shape[0], ndx.shape[1], ndx.shape[2], ndx.shape[3]];
         const [kernelRows, kernelCols, kernelIn, outChannels] =  [ndk.shape[0], ndk.shape[1], ndk.shape[2], ndk.shape[3]];
 
         const dilateKernelRows = kernelRows + (kernelRows - 1) * (dilations[0] - 1);
@@ -226,38 +226,72 @@ class JsNdarrayBackend implements Backend {
         const resultTypedArray = new Float32Array(outSize); 
 
         if (sUseRawConv2d) {
-            let ndr = ndarray(resultTypedArray, [batchSize, outRows, outCols, outChannels])
+            // let ndr = ndarray(resultTypedArray, [batchSize, outRows, outCols, outChannels])
+            // for (let b = 0; b < batchSize; ++b) {
+            //     for (let d2 = 0; d2 < outChannels; ++d2) {
+            //         for (let yR = 0; yR < outRows; ++yR) {
+            //             const xRCorner = yR * strides[0];
+            //             for (let yC = 0; yC < outCols; ++yC) {
+            //                 const xCCorner = yC * strides[1];
+    
+            //                 let dotProd = 0;
+            //                 for (let wR = 0; wR < kernelRows; wR++) {
+            //                     const xR = xRCorner + wR * dilations[0];
+    
+            //                     if (xR < 0 || xR >= inputRows) {
+            //                         continue;
+            //                     }
+    
+            //                     for (let wC = 0; wC < kernelCols; wC++) {
+            //                         const xC = xCCorner + wC * dilations[1];
+    
+            //                         if (xC < 0 || xC >= inputCols) {
+            //                             continue;
+            //                         }
+    
+            //                         for (let d1 = 0; d1 < inputChannels; ++d1) {
+            //                             const pixel = ndx.get(b, xR, xC, d1);
+            //                             const weight = ndk.get(wR, wC, d1, d2);
+            //                             dotProd += pixel * weight;
+            //                         }
+            //                     }
+            //                 }
+            //                 ndr.set(b, yR, yC, d2, dotProd);
+            //             }
+            //         }
+            //     }
+            // }
+
+            // prepare the row filter
+            const sizeOfPatch = kernelRows * kernelCols * inputChannels;
+            const patch = ndarray(new Float32Array(sizeOfPatch), [kernelRows, kernelCols, inputChannels]);
+            const ndf = ndarray(new Float32Array(sizeOfPatch * outChannels), [sizeOfPatch, outChannels]);
+            for (let yC = 0; yC < outChannels; ++yC) {
+                nd_ops.assign(patch, ndk.pick(null, null, null, yC));
+                const reshaped = ndarray(patch.data, [sizeOfPatch]);
+                nd_ops.assign(ndf.pick(null, yC), reshaped);
+            }
+
+            const ndr = ndarray(resultTypedArray, [batchSize, outRows, outCols, outChannels]);
+            const pixelResult = ndarray(new Float32Array(outChannels), [1, outChannels]);
+            let offset = 0;
             for (let b = 0; b < batchSize; ++b) {
-                for (let d2 = 0; d2 < outChannels; ++d2) {
-                    for (let yR = 0; yR < outRows; ++yR) {
-                        const xRCorner = yR * strides[0];
-                        for (let yC = 0; yC < outCols; ++yC) {
-                            const xCCorner = yC * strides[1];
-    
-                            let dotProd = 0;
-                            for (let wR = 0; wR < kernelRows; wR++) {
-                                const xR = xRCorner + wR * dilations[0];
-    
-                                if (xR < 0 || xR >= inputRows) {
-                                    continue;
-                                }
-    
-                                for (let wC = 0; wC < kernelCols; wC++) {
-                                    const xC = xCCorner + wC * dilations[1];
-    
-                                    if (xC < 0 || xC >= inputCols) {
-                                        continue;
-                                    }
-    
-                                    for (let d1 = 0; d1 < inputChannels; ++d1) {
-                                        const pixel = ndx.get(b, xR, xC, d1);
-                                        const weight = ndk.get(wR, wC, d1, d2);
-                                        dotProd += pixel * weight;
-                                    }
-                                }
-                            }
-                            ndr.set(b, yR, yC, d2, dotProd);
-                        }
+                let singleImage = ndx.pick(b, null, null, null);
+                for (let yH = 0; yH < outRows; ++yH) {
+                    let xH = yH * strides[0];
+                    for (let yW = 0; yW < outCols; ++yW) {
+                        let xW = yW * strides[1];
+
+                        let patchView = singleImage
+                                .hi(xH + dilateKernelRows, xW + dilateKernelCols, inputChannels)
+                                .lo(xH, xW, 0)
+                                .step(dilations[0], dilations[1], 1);
+                        nd_ops.assign(patch, patchView);
+                        const patchInRow:ndarray = ndarray(patch.data, [1, sizeOfPatch]);
+
+                        nd_gemm(pixelResult, patchInRow, ndf);
+                        ndr.data.set(pixelResult.data, offset);
+                        offset += outChannels;
                     }
                 }
             }
@@ -275,13 +309,16 @@ class JsNdarrayBackend implements Backend {
                 colImage = ndarray(new Float32Array(numberOfPatches * sizeOfPatch), [numberOfPatches, sizeOfPatch]);
                 let offset = 0;
                 for (let b = 0; b < batchSize; ++b) {
-                    for (let r = 0, rMax = inputRows - dilateKernelRows + 1; r < rMax; r += dilateKernelRows) {
-                        for (let c = 0, cMax = inputCols - dilateKernelCols + 1; c < cMax; c += dilateKernelCols) {
-                            let patchView = ndx.pick(b, null, null, null);
-                            patchView = patchView.hi(r + dilateKernelRows, c + dilateKernelCols, inputChannels);
-                            patchView = patchView.lo(r, c, 0);
-                            patchView = patchView.step(dilations[0], dilations[1], 1);
-                            nd_ops.assign(patch, patchView);
+                    let singleImage = ndx.pick(b, null, null, null);
+                    for (let outRow = 0; outRow < outRows; ++outRow) {
+                        let inRow = outRow * strides[0];
+                        for (let outCol = 0; outCol < outCols; ++outCol) {
+                            let inCol = outCol * strides[1];
+                            let patchView = singleImage
+                                .hi(inRow + dilateKernelRows, inCol + dilateKernelCols, inputChannels)
+                                .lo(inRow, inCol, 0)
+                                .step(dilations[0], dilations[1], 1);
+                                nd_ops.assign(patch, patchView);
                             colImage.data.set(patch.data, offset);
                             offset += sizeOfPatch;
                         }
@@ -289,7 +326,7 @@ class JsNdarrayBackend implements Backend {
                 }
             }
 
-            // prepare the col image
+            // prepare the row filter
             const ndf = ndarray(new Float32Array(sizeOfPatch * outChannels), [sizeOfPatch, outChannels]);
             for (let ch = 0; ch < outChannels; ++ch) {
                 nd_ops.assign(patch, ndk.pick(null, null, null, ch));
@@ -298,7 +335,7 @@ class JsNdarrayBackend implements Backend {
             }
             
             let ndr = ndarray(resultTypedArray, [numberOfPatches, outChannels]);
-            nd_gemm(ndr, colImage, ndf, 1, 1);
+            nd_gemm(ndr, colImage, ndf);
         }
 
         const r = new Tensor('float32', [batchSize, outRows, outCols, outChannels], resultTypedArray);
