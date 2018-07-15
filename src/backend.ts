@@ -2,11 +2,27 @@ import { TypedArray, DataType } from './types';
 import { Tensor} from './tensor';
 import { TensorManager } from './tensor_manager';
 
+export class TensorPrintOptions {
+    readonly stringify: (x: number) => string;
+    readonly excludeLastAxis: [number, number];
+    readonly excludeHiAxises: [number, number];
+
+    constructor(stringify : (x: number) => string = null, 
+                excludeLastAxis: [number, number] = null, 
+                excludeHiAxises: [number, number] = null) {
+        this.stringify = stringify ? stringify : x => x.toString(); 
+        this.excludeLastAxis = (excludeLastAxis) ? excludeLastAxis : [Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER];
+        this.excludeHiAxises = (excludeHiAxises) ? excludeHiAxises : this.excludeLastAxis;
+    }
+};
+
 export interface Backend extends TensorManager{
     // Getting basic tensor properties
     tensorShape(t: Tensor): number[];
     tensorDtype(t: Tensor): DataType;
     tensorSize(t: Tensor): number;
+
+    print(t: Tensor, options?: TensorPrintOptions);
 
     //init(t: Tensor, initializer: (t: Tensor)=>void);
     randomUniformEq(t: Tensor, a: number, b: number) : void;

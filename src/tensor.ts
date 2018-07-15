@@ -6,6 +6,7 @@ export class Tensor {
 
     readonly id: number;
     data: BackendTensor;
+    private _name: string = null;
 
     constructor(dtype: DataType, shape: number[], values: StrictTensorLike = null, backendTensor: BackendTensor = null) {
         this.id = Tensor.sNextId++;
@@ -16,6 +17,14 @@ export class Tensor {
         else {
             ENV.engine.make(this, dtype, shape, values);
         }
+    }
+
+    get name(): string {
+        return (this._name && this._name.length > 0) ? this._name : `Tensor${this.id}`;
+    }
+
+    set name(value: string) {
+        this._name = value;
     }
 
     get shape() : Shape {

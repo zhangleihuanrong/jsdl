@@ -1,6 +1,5 @@
 import { ENV } from './environments';
 import { Tensor } from './tensor';
-import { print } from './utils';
 
 const transpose =  ENV.engine.backend.transpose;
 const matMul = ENV.engine.backend.matMul;
@@ -13,7 +12,7 @@ const reshape = ENV.engine.backend.reshape;
 const randomNormEq = ENV.engine.backend.randomNormEq;
 const randomUniformEq = ENV.engine.backend.randomUniformEq;
 const conv2d = ENV.engine.backend.conv2d;
-
+const print = ENV.engine.backend.print;
 
 const tensor = Tensor.create;
 

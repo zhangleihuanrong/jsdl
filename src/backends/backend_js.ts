@@ -1,14 +1,15 @@
 import { StrictTensorLike, createTypeArrayForShape, TypedArray, getTypedArraySample, DataType, Shape } from '../types';
 import { Tensor } from '../tensor';
-import { Backend } from '../backend';
+import { Backend, TensorPrintOptions } from '../backend';
 import { ENV } from '../environments';
 
 import * as ndarray from 'ndarray';
 import * as nd_gemm from 'ndarray-gemm';
 import * as nd_ops from 'ndarray-ops';
 import { MPRandGauss } from '../utils/rand';
+import { printNdarray, iterateNdarray } from '../utils/ndarray_print';
 
-const sUseRawConv2d = true;
+const sUseRawConv2d = false;
 
 function ndarrayOf(t: Tensor) : ndarray {
     return t.data as ndarray;
@@ -30,6 +31,7 @@ function nd_pad(x: ndarray, paddings: [number, number][], padVal: number = 0) : 
     return padded;
 }
 
+const defaultTensorPrintOption = new TensorPrintOptions();
 
 class JsNdarrayBackend implements Backend {
     tensorShape(t: Tensor): number[] {
@@ -97,28 +99,43 @@ class JsNdarrayBackend implements Backend {
         return null;
     }
 
-    //suppose t is from typed array
-    randomUniformEq(t: Tensor, a: number, b: number) : void {
-        const arr = ndarrayOf(t).data as TypedArray;
-        for (let i = 0; i < arr.length; ++i) {
-            const v = Math.random() * (b - a) + a;
-            arr[i] = v;
+    print(x: Tensor, tpo?: TensorPrintOptions) {
+        if (x.data) {
+            const ndx = ndarrayOf(x);
+            tpo = (tpo)? tpo : defaultTensorPrintOption;
+            printNdarray(
+                ndx, 
+                x.name,
+                tpo.stringify,
+                tpo.excludeLastAxis,
+                tpo.excludeHiAxises);
         }
+        else {
+            console.log(`${x.name} -- TensorId:${x.id} --:  contains no data`)
+        }
+    }
+
+    randomUniformEq(t: Tensor, a: number, b: number) : void {
+        const ndt = ndarrayOf(t);
+        iterateNdarray(ndt, (arr: ndarray, loc: number[]) => {
+            const v = Math.random() * (b - a) + a;
+            arr.set(...loc, v);
+        })
     }
 
     randomNormEq(t: Tensor, mean: number, stdDev: number, seed: number) : void {
         const dtype = t.dtype as 'float32' | 'int32';
         const randGauss = new MPRandGauss(mean, stdDev, dtype, false, seed);
-        const arr = ndarrayOf(t).data as TypedArray;
-        for (let i = 0; i < arr.length; i++) {
-            arr[i] = randGauss.nextValue();
-        }
+        iterateNdarray(ndarrayOf(t), (ndt:ndarray, loc:number[]) => {
+            ndt.set(...loc, randGauss.nextValue());
+        })
     }
 
     transpose(x: Tensor, perm: number[]): Tensor {
         const bt = ndarrayOf(x);
         const trans = bt.transpose(...perm);
         const y = new Tensor(x.dtype, trans.shape, null, trans);
+        y.name = `Tensor${y.id}_transpose_${x.id}`;
         return y;
     }
 
@@ -126,11 +143,12 @@ class JsNdarrayBackend implements Backend {
         const activeA = (transposeA) ? this.transpose(a, [1, 0]) : a;
         const activeB = (transposeB) ? this.transpose(b, [1, 0]) : b;
 
-        const backA = (activeA.data as ndarray);
-        const backB = (activeB.data as ndarray);
-        const c = new Tensor(activeB.dtype, [backA.shape[0], backB.shape[1]], null, null);
-        const backC = (c.data as ndarray);
-        nd_gemm(backC, backA, backB, 1, 0);
+        const nda = ndarrayOf(activeA);
+        const ndb = ndarrayOf(activeB);
+        const c = new Tensor(nda.dtype, [nda.shape[0], ndb.shape[1]], null, null);
+        const ndc = ndarrayOf(c);
+        nd_gemm(ndc, nda, ndb, 1, 0);
+        c.name = `Tensor${c.id}_matmul_${a.id}_${b.id}`;
         return c;
     }
 
@@ -149,7 +167,9 @@ class JsNdarrayBackend implements Backend {
             shape[i] = (newShape[i] <= 0) ? axisSize : newShape[i];
         }
         const ta = this.readSync(x);
-        return new Tensor(x.dtype, shape, ta);
+        const y = new Tensor(x.dtype, shape, ta);
+        y.name = `Tensor${y.id}_reshape_${x.id}`;
+        return y;
     }
 
     add(a: Tensor, b: Tensor): Tensor {
@@ -174,6 +194,7 @@ class JsNdarrayBackend implements Backend {
                 nd_ops.addseq(col, flatB.get(i));
             }
         }
+        c.name = `Tensor${c.id}_add_${a.id}_${b.id}`;
         return c;
     }
 
@@ -281,32 +302,36 @@ class JsNdarrayBackend implements Backend {
         }
 
         const r = new Tensor('float32', [batchSize, outRows, outCols, outChannels], resultTypedArray);
+        r.name = `Tensor${r.id}_conv2D_${x.id}`;
         return r;
     }
 
 
     neg(x: Tensor): Tensor {
-        const backX = (x.data as ndarray);
+        const ndx = ndarrayOf(x);
         const y = new Tensor(x.dtype, x.shape);
-        const backY = (y.data as ndarray);
-        nd_ops.neg(backY, backX);
+        const ndy = ndarrayOf(y);
+        nd_ops.neg(ndy, ndx);
+        y.name = `Tensor${y.id}_neg_${x.id}`;
         return y;
     }
 
     multiply(a: Tensor, b: Tensor): Tensor {
-        const backA = (a.data as ndarray);
-        const backB = (b.data as ndarray);
+        const nda = ndarrayOf(a);
+        const ndb = ndarrayOf(b);
         const c = new Tensor(a.dtype, a.shape);
-        const backC = (c.data as ndarray);
-        nd_ops.multiply(backC, backA, backB);
+        const ndc = ndarrayOf(c);
+        nd_ops.multiply(ndc, nda, ndb);
+        c.name = `Tensor${c.id}_multiply_${a.id}_${b.id}`;
         return c;
     }
 
     relu(x: Tensor): Tensor {
-        const backX = (x.data as ndarray);
+        const ndx = ndarrayOf(x);
         const y = new Tensor(x.dtype, x.shape);
-        const backY = (y.data as ndarray);
-        nd_ops.maxs(backY, backX, 0);
+        const ndy = ndarrayOf(y);
+        nd_ops.maxs(ndy, ndx, 0);
+        y.name = `Tensor${y.id}_relu_${x.id}`;
         return y;
     }
 }
