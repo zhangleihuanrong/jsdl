@@ -8,6 +8,7 @@
   },
   "scripts": {
     "prepare": "tsc",
+    "box": "node ./dist/demos/sand.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {

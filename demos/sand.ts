@@ -19,9 +19,6 @@ function loadTensor(pathName: string, shape: number[]) : Tensor {
     return tf.tensor(ta, shape);
 }
 
-const number2string = (x: number) => x.toExponential(5);
-const lastAxisExclude=  [3, -2] as [number, number];
-
 function isNumberNotSame(a: number, b: number) : Boolean {
     const aa = Math.abs(a);
     const ab = Math.abs(b);
@@ -46,7 +43,9 @@ function testConv2D(
     goldenResult: Tensor, 
     padding:number[], 
     strides: [number, number], 
-    dilations: [number, number]
+    dilations: [number, number],
+    number2string: (number) => string = (x) => x.toString(),
+    lastAxisExclude: [number, number] = [3, -2],
 ) {
     image.name = `image${image.id}`;
     tf.print(image, number2string, lastAxisExclude);
@@ -152,5 +151,6 @@ testConv2D(
     loadTensor("testdata/convResult.buf", [1, 64, 112, 112]),
     [3, 3, 3, 3],
     [2, 2],
-    [1, 1]
+    [1, 1],
+    (x: number) => x.toFixed(7)
 );
