@@ -1,18 +1,35 @@
-import { StrictTensorLike, createTypeArrayForShape, TypedArray, getTypedArraySample, DataType, Shape } from '../types';
+import { createTypeArrayForShape, TypedArray, DataType, Shape, BackendTensor } from '../types';
 import { Tensor } from '../tensor';
-import { Backend, TensorPrintOptions } from '../backend';
+import { Backend } from '../backend';
 import { ENV } from '../environments';
-
 import * as ndarray from 'ndarray';
 import * as nd_gemm from 'ndarray-gemm';
 import * as nd_ops from 'ndarray-ops';
 import { MPRandGauss } from '../utils/rand';
-import { printNdarray, iterateNdarray } from '../utils/ndarray_print';
 
-const sUseRawConv2d = true;
+import { iterateNdarray } from '../utils/ndarray_print';
+
+class NdarrayTensor implements BackendTensor {
+    _array: ndarray;
+
+    constructor(nda: ndarray) {
+        this._array = nda;
+    }
+
+    shape(): number[] {
+        return this._array.shape;;
+    }
+    dtype(): DataType {
+        // TODO: not fully compatible
+        return this._array.dtype as DataType;;
+    }
+    size(): number {
+        return this._array.size;
+    }
+}
 
 function ndarrayOf(t: Tensor) : ndarray {
-    return t.data as ndarray;
+    return (t.data as NdarrayTensor)._array;
 }
 
 function nd_pad(x: ndarray, paddings: [number, number][], padVal: number = 0) : ndarray {
@@ -31,58 +48,17 @@ function nd_pad(x: ndarray, paddings: [number, number][], padVal: number = 0) : 
     return padded;
 }
 
-const defaultTensorPrintOption = new TensorPrintOptions();
-
 class JsNdarrayBackend implements Backend {
-    tensorShape(t: Tensor): number[] {
-        return (t.data as ndarray).shape;
-    }
-
-    tensorDtype(t: Tensor): DataType {
-        const arrayData = (t.data as ndarray).data;
-        if (arrayData instanceof Int32Array) {
-            return 'int32';
-        }
-        else if (arrayData instanceof Uint8Array) {
-            return 'bool'
-        } 
-        else {
-            return 'float32';
-        }
-    }
-
-    tensorSize(t: Tensor): number {
-        return (t.data as ndarray).size;
-    }
-
-    wrap(t: Tensor, dtype: DataType, shape: Shape, backendTensor: object): void {
-        // TODO: check type, shape, etc if needed
+    wrap(t: Tensor, backendTensor: BackendTensor): void {
         t.data = backendTensor;
     }
 
-    make(t: Tensor, dtype: DataType, shape: Shape, values: StrictTensorLike): void {
-        const taSample = getTypedArraySample(dtype);
-        if (!values) {
-            const size = shape.reduce((a, b) => a*b, 1);
-            const ta = (dtype == 'int32') ? new Int32Array(size) :
-                       (dtype != 'float32') ? new Uint8Array(size) :
-                                              new Float32Array(size);
-            const arr = ndarray(ta, shape);
-            t.data = arr;
-        }
-        else if (values instanceof Array) {
-            t.data = ndarray(values, shape);
-        }
-        else if (values.constructor == taSample.constructor) {
-            t.data = ndarray(values, shape);
-        }
-        else {
-            // TODO
-            throw new Error("Method not implemented.");
-        }
+    make(t: Tensor, dtype: DataType, shape: Shape, values: TypedArray): void {
+        t.data = new NdarrayTensor(ndarray(values, shape));
     }
 
     free(t: Tensor): void {
+        // ???
         delete t.data;
     }
 
@@ -97,22 +73,6 @@ class JsNdarrayBackend implements Backend {
             return ta;
         }
         return null;
-    }
-
-    print(x: Tensor, tpo?: TensorPrintOptions) {
-        if (x.data) {
-            const ndx = ndarrayOf(x);
-            tpo = (tpo)? tpo : defaultTensorPrintOption;
-            printNdarray(
-                ndx, 
-                x.name,
-                tpo.stringify,
-                tpo.excludeLastAxis,
-                tpo.excludeHiAxises);
-        }
-        else {
-            console.log(`${x.name} -- TensorId:${x.id} --:  contains no data`)
-        }
     }
 
     randomUniformEq(t: Tensor, a: number, b: number) : void {
@@ -134,7 +94,7 @@ class JsNdarrayBackend implements Backend {
     transpose(x: Tensor, perm: number[]): Tensor {
         const bt = ndarrayOf(x);
         const trans = bt.transpose(...perm);
-        const y = new Tensor(x.dtype, trans.shape, null, trans);
+        const y = Tensor.fromBackend(new NdarrayTensor(trans));
         y.name = `Tensor${y.id}_transpose_${x.id}`;
         return y;
     }
@@ -145,7 +105,7 @@ class JsNdarrayBackend implements Backend {
 
         const nda = ndarrayOf(activeA);
         const ndb = ndarrayOf(activeB);
-        const c = new Tensor(nda.dtype, [nda.shape[0], ndb.shape[1]], null, null);
+        const c = Tensor.create(null, [nda.shape[0], ndb.shape[1]], nda.dtype);
         const ndc = ndarrayOf(c);
         nd_gemm(ndc, nda, ndb, 1, 0);
         c.name = `Tensor${c.id}_matmul_${a.id}_${b.id}`;
@@ -167,19 +127,21 @@ class JsNdarrayBackend implements Backend {
             shape[i] = (newShape[i] <= 0) ? axisSize : newShape[i];
         }
         const ta = this.readSync(x);
-        const y = new Tensor(x.dtype, shape, ta);
+        const y = Tensor.create(ta, shape, x.dtype);
         y.name = `Tensor${y.id}_reshape_${x.id}`;
         return y;
     }
 
+    // TODO: support better broadcasting...
     add(a: Tensor, b: Tensor): Tensor {
-        const backA = (a.data as ndarray);
-        const backB = (b.data as ndarray);
-        const c = new Tensor(a.dtype, a.shape);
-        const backC = (c.data as ndarray);
+        const backA = ndarrayOf(a);
+        const backB = ndarrayOf(b);
+        const c = Tensor.create(null, a.shape, a.dtype);
+        const backC = ndarrayOf(c);
         if (backA.shape.length == backB.shape.length) {
+            // check shape are same
             nd_ops.add(backC, backA, backB);
-        } else { // only support one dimension more
+        } else {
             nd_ops.assign(backC, backA);
             const flatB = (this.reshape(b, [-1])).data as ndarray;;
             const flatC = (this.reshape(c, [backC.shape[0], -1])).data as ndarray;
@@ -225,120 +187,40 @@ class JsNdarrayBackend implements Backend {
         const outSize = batchSize * outRows * outCols * outChannels;
         const resultTypedArray = new Float32Array(outSize); 
 
-        if (sUseRawConv2d) {
-            // let ndr = ndarray(resultTypedArray, [batchSize, outRows, outCols, outChannels])
-            // for (let b = 0; b < batchSize; ++b) {
-            //     for (let d2 = 0; d2 < outChannels; ++d2) {
-            //         for (let yR = 0; yR < outRows; ++yR) {
-            //             const xRCorner = yR * strides[0];
-            //             for (let yC = 0; yC < outCols; ++yC) {
-            //                 const xCCorner = yC * strides[1];
-    
-            //                 let dotProd = 0;
-            //                 for (let wR = 0; wR < kernelRows; wR++) {
-            //                     const xR = xRCorner + wR * dilations[0];
-    
-            //                     if (xR < 0 || xR >= inputRows) {
-            //                         continue;
-            //                     }
-    
-            //                     for (let wC = 0; wC < kernelCols; wC++) {
-            //                         const xC = xCCorner + wC * dilations[1];
-    
-            //                         if (xC < 0 || xC >= inputCols) {
-            //                             continue;
-            //                         }
-    
-            //                         for (let d1 = 0; d1 < inputChannels; ++d1) {
-            //                             const pixel = ndx.get(b, xR, xC, d1);
-            //                             const weight = ndk.get(wR, wC, d1, d2);
-            //                             dotProd += pixel * weight;
-            //                         }
-            //                     }
-            //                 }
-            //                 ndr.set(b, yR, yC, d2, dotProd);
-            //             }
-            //         }
-            //     }
-            // }
+        const sizeOfPatch = kernelRows * kernelCols * inputChannels;
+        const patch = ndarray(new Float32Array(sizeOfPatch), [kernelRows, kernelCols, inputChannels]);
+        const ndf = ndarray(new Float32Array(sizeOfPatch * outChannels), [sizeOfPatch, outChannels]);
+        for (let yC = 0; yC < outChannels; ++yC) {
+            nd_ops.assign(patch, ndk.pick(null, null, null, yC));
+            const reshaped = ndarray(patch.data, [sizeOfPatch]);
+            nd_ops.assign(ndf.pick(null, yC), reshaped);
+        }
 
-            // prepare the row filter
-            const sizeOfPatch = kernelRows * kernelCols * inputChannels;
-            const patch = ndarray(new Float32Array(sizeOfPatch), [kernelRows, kernelCols, inputChannels]);
-            const ndf = ndarray(new Float32Array(sizeOfPatch * outChannels), [sizeOfPatch, outChannels]);
-            for (let yC = 0; yC < outChannels; ++yC) {
-                nd_ops.assign(patch, ndk.pick(null, null, null, yC));
-                const reshaped = ndarray(patch.data, [sizeOfPatch]);
-                nd_ops.assign(ndf.pick(null, yC), reshaped);
-            }
+        const ndr = ndarray(resultTypedArray, [batchSize, outRows, outCols, outChannels]);
+        const pixelResult = ndarray(new Float32Array(outChannels), [1, outChannels]);
+        let offset = 0;
+        for (let b = 0; b < batchSize; ++b) {
+            let singleImage = ndx.pick(b, null, null, null);
+            for (let yH = 0; yH < outRows; ++yH) {
+                let xH = yH * strides[0];
+                for (let yW = 0; yW < outCols; ++yW) {
+                    let xW = yW * strides[1];
 
-            const ndr = ndarray(resultTypedArray, [batchSize, outRows, outCols, outChannels]);
-            const pixelResult = ndarray(new Float32Array(outChannels), [1, outChannels]);
-            let offset = 0;
-            for (let b = 0; b < batchSize; ++b) {
-                let singleImage = ndx.pick(b, null, null, null);
-                for (let yH = 0; yH < outRows; ++yH) {
-                    let xH = yH * strides[0];
-                    for (let yW = 0; yW < outCols; ++yW) {
-                        let xW = yW * strides[1];
+                    let patchView = singleImage
+                            .hi(xH + dilateKernelRows, xW + dilateKernelCols, inputChannels)
+                            .lo(xH, xW, 0)
+                            .step(dilations[0], dilations[1], 1);
+                    nd_ops.assign(patch, patchView);
+                    const patchInRow:ndarray = ndarray(patch.data, [1, sizeOfPatch]);
 
-                        let patchView = singleImage
-                                .hi(xH + dilateKernelRows, xW + dilateKernelCols, inputChannels)
-                                .lo(xH, xW, 0)
-                                .step(dilations[0], dilations[1], 1);
-                        nd_ops.assign(patch, patchView);
-                        const patchInRow:ndarray = ndarray(patch.data, [1, sizeOfPatch]);
-
-                        nd_gemm(pixelResult, patchInRow, ndf);
-                        ndr.data.set(pixelResult.data, offset);
-                        offset += outChannels;
-                    }
+                    nd_gemm(pixelResult, patchInRow, ndf);
+                    ndr.data.set(pixelResult.data, offset);
+                    offset += outChannels;
                 }
             }
         }
-        else {
-            // prepare the col image
-            const numberOfPatches = batchSize * outRows * outCols;
-            const sizeOfPatch = kernelRows * kernelCols * inputChannels;
-            const patch = ndarray(new Float32Array(sizeOfPatch), [kernelRows, kernelCols, inputChannels]);
-            let colImage : ndarray = null;
-            if (dilateKernelRows == 1 && dilateKernelCols == 1 && strides[0] == 1 && strides[1] == 1) {
-                colImage = ndarray(ndx.data, [numberOfPatches, sizeOfPatch]);  // infact a reshape
-            }
-            else {
-                colImage = ndarray(new Float32Array(numberOfPatches * sizeOfPatch), [numberOfPatches, sizeOfPatch]);
-                let offset = 0;
-                for (let b = 0; b < batchSize; ++b) {
-                    let singleImage = ndx.pick(b, null, null, null);
-                    for (let outRow = 0; outRow < outRows; ++outRow) {
-                        let inRow = outRow * strides[0];
-                        for (let outCol = 0; outCol < outCols; ++outCol) {
-                            let inCol = outCol * strides[1];
-                            let patchView = singleImage
-                                .hi(inRow + dilateKernelRows, inCol + dilateKernelCols, inputChannels)
-                                .lo(inRow, inCol, 0)
-                                .step(dilations[0], dilations[1], 1);
-                                nd_ops.assign(patch, patchView);
-                            colImage.data.set(patch.data, offset);
-                            offset += sizeOfPatch;
-                        }
-                    }
-                }
-            }
 
-            // prepare the row filter
-            const ndf = ndarray(new Float32Array(sizeOfPatch * outChannels), [sizeOfPatch, outChannels]);
-            for (let ch = 0; ch < outChannels; ++ch) {
-                nd_ops.assign(patch, ndk.pick(null, null, null, ch));
-                const reshaped = ndarray(patch.data, [sizeOfPatch]);
-                nd_ops.assign(ndf.pick(null, ch), reshaped);
-            }
-            
-            let ndr = ndarray(resultTypedArray, [numberOfPatches, outChannels]);
-            nd_gemm(ndr, colImage, ndf);
-        }
-
-        const r = new Tensor('float32', [batchSize, outRows, outCols, outChannels], resultTypedArray);
+        const r = Tensor.create(resultTypedArray, [batchSize, outRows, outCols, outChannels]);
         r.name = `Tensor${r.id}_conv2D_${x.id}`;
         return r;
     }
@@ -346,7 +228,7 @@ class JsNdarrayBackend implements Backend {
 
     neg(x: Tensor): Tensor {
         const ndx = ndarrayOf(x);
-        const y = new Tensor(x.dtype, x.shape);
+        const y = Tensor.create(null, x.shape, x.dtype);
         const ndy = ndarrayOf(y);
         nd_ops.neg(ndy, ndx);
         y.name = `Tensor${y.id}_neg_${x.id}`;
@@ -356,7 +238,7 @@ class JsNdarrayBackend implements Backend {
     multiply(a: Tensor, b: Tensor): Tensor {
         const nda = ndarrayOf(a);
         const ndb = ndarrayOf(b);
-        const c = new Tensor(a.dtype, a.shape);
+        const c = Tensor.create(null, a.shape, a.dtype);
         const ndc = ndarrayOf(c);
         nd_ops.multiply(ndc, nda, ndb);
         c.name = `Tensor${c.id}_multiply_${a.id}_${b.id}`;
@@ -365,7 +247,7 @@ class JsNdarrayBackend implements Backend {
 
     relu(x: Tensor): Tensor {
         const ndx = ndarrayOf(x);
-        const y = new Tensor(x.dtype, x.shape);
+        const y = Tensor.create(null, x.shape, x.dtype);
         const ndy = ndarrayOf(y);
         nd_ops.maxs(ndy, ndx, 0);
         y.name = `Tensor${y.id}_relu_${x.id}`;

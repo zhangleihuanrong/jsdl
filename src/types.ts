@@ -18,7 +18,12 @@ export interface RecursiveArray<T extends any> {
 export type StrictTensorLike = TypedArray | RecursiveArray<number> | RecursiveArray<boolean>;
 export type TensorLike = StrictTensorLike | number | boolean;
 
-export type BackendTensor = object;
+//export type BackendTensor = object;
+export interface BackendTensor {
+    shape(): number[];
+    dtype(): DataType;
+    size(): number;
+}
 
 export function isTypedArray(a: any) : boolean {
     return a instanceof Float32Array || a instanceof Int32Array || a instanceof Uint8Array;
@@ -37,16 +42,6 @@ export function getShape(val: any) : number[] {
         val = val[0];
     }
     return shape;
-}
-
-const ArrayDataInstances : object = {
-    float32: new Float32Array([1.0]), 
-    int32: new Int32Array([1]),
-    bool: new Uint8Array([0]),
-};
-    
-export function getTypedArraySample(dtype: DataType) : TypedArray {
-    return ArrayDataInstances[dtype];
 }
 
 export function createTypedArray<D extends DataType>(dtype: D, len: number) : DataTypeMap[D] {
@@ -68,37 +63,42 @@ export function createTypeArrayForShape<D extends DataType>(dtype: D, shape: num
     return createTypedArray(dtype, len);
 }
 
-export function toTypedArray<D extends DataType>(a: ArrayData<D>, dtype: D) : DataTypeMap[D] {
-    if ((a instanceof Float32Array && dtype === 'float32') ||
-        (a instanceof Int32Array && dtype === 'int32') ||
-        (a instanceof Uint8Array && dtype === 'bool')) {
-            return a as DataTypeMap[D];
+export function isTypeArrayFor(a: any, dtype: DataType) {
+    return (a instanceof Float32Array && dtype === 'float32') ||
+            (a instanceof Int32Array && dtype === 'int32') ||
+            (a instanceof Uint8Array && dtype === 'bool');
+}
+
+export function toTypedArray<D extends DataType>(dtype: D, a: StrictTensorLike) : DataTypeMap[D] {
+    if (isTypeArrayFor(a, dtype)) {
+        return a as DataTypeMap[D];
     }
     if (Array.isArray(a)) {
-        const arr = flatten(a as number[]);
-        if (dtype === 'float32' || dtype === 'int32') {
-            return new Float32Array(arr as number[]);
+        if (dtype === 'float32'){
+            return new Float32Array(a as number[]);
+        } else if (dtype === 'int32') {
+            return new Int32Array(a as number[]);
         }
         else if (dtype === 'bool') {
-            const bools = new Uint8Array(arr.length);
-            for (let i = 0; i < bools.length; ++i) {
-                bools[i] = (Math.round(arr[i] as number) !== 0) ? 1 : 0;
-            }
+            const shape = getShape(a);
+            const bools = new Uint8Array(shape.reduce((s, len) => s*len, 1));
+            const assigning = { index: 0 };
+            arrayIterate(a, (x: any) => {
+                bools[assigning.index] = x;
+            });
             return bools;
         }
     }
     throw new Error('should not arrived here!')
 }
 
-
-export function flatten<T extends number|boolean>(arr: T | RecursiveArray<T>, ret: T[] = []) : T[] {
+export function arrayIterate(arr:any, cb: (x: any) => void) {
     if (Array.isArray(arr)) {
         for (let i = 0; i < arr.length; ++i) {
-            flatten(arr[i], ret);
+            arrayIterate(arr[i], cb);
         }
     }
     else {
-        ret.push(arr as T);
+        cb(arr);
     }
-    return ret;
 }

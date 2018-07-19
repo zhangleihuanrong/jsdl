@@ -1,7 +1,8 @@
 import * as fs from 'fs';
 
-import { tf, Tensor } from '../src/index';
-import { TensorPrintOptions } from '../src/backend';
+import * as tf from '../src/index';
+import {Tensor} from '../src/index';
+
 import { iterateNdarray } from '../src/utils/ndarray_print';
 
 import * as ndarray from 'ndarray';
@@ -18,7 +19,8 @@ function loadTensor(pathName: string, shape: number[]) : Tensor {
     return tf.tensor(ta, shape);
 }
 
-const tpo: TensorPrintOptions = new TensorPrintOptions(x => x.toExponential(5), [3, -2]);
+const number2string = (x: number) => x.toExponential(5);
+const lastAxisExclude=  [3, -2] as [number, number];
 
 function isNumberNotSame(a: number, b: number) : Boolean {
     const aa = Math.abs(a);
@@ -39,7 +41,7 @@ function arraysEqual(a: number[], b: number[]) : boolean {
 
 
 function testConv2D(
-    image:Tensor, 
+    image: Tensor, 
     filter: Tensor, 
     goldenResult: Tensor, 
     padding:number[], 
@@ -47,13 +49,13 @@ function testConv2D(
     dilations: [number, number]
 ) {
     image.name = `image${image.id}`;
-    tf.print(image, tpo);
+    tf.print(image, number2string, lastAxisExclude);
 
     filter.name = `filter${filter.id}`;
-    tf.print(filter, tpo);
+    tf.print(filter, number2string, lastAxisExclude);
         
     goldenResult.name = `GoldConv2DResult${goldenResult.id}`;
-    tf.print(goldenResult, tpo);
+    tf.print(goldenResult, number2string, lastAxisExclude);
         
     let r: Tensor = null;
     const rounds = 1;
@@ -70,7 +72,7 @@ function testConv2D(
     
     r = tf.transpose(r, [0, 3, 1, 2]);
     r.name = `Conv2dResult${r.id}`;
-    tf.print(r, tpo);
+    tf.print(r, number2string, lastAxisExclude);
  
     console.log(`  --Total: ${millis}ms, avg:${avgMillis}ms`);
  
@@ -127,18 +129,18 @@ const goldb = [ // for padding [1,1,1,1]
 ];
   
 testConv2D(
-    new Tensor('float32', [1, 1, 4, 4], ima),
-    new Tensor('float32', [2, 1, 2, 2], flta),
-    new Tensor('float32', [1, 2, 2, 2], golda),
+    tf.tensor(ima, [1, 1, 4, 4]),
+    tf.tensor(flta, [2, 1, 2, 2]),
+    tf.tensor(golda, [1, 2, 2, 2]),
     [0, 0, 0, 0],
     [2, 2],
     [1, 1]
 );
 
 testConv2D(
-    new Tensor('float32', [1, 1, 4, 4], ima),
-    new Tensor('float32', [2, 1, 2, 2], flta),
-    new Tensor('float32', [1, 2, 3, 3], goldb),
+    tf.tensor(ima, [1, 1, 4, 4]),
+    tf.tensor(flta, [2, 1, 2, 2]),
+    tf.tensor(goldb, [1, 2, 3, 3]),
     [1, 1, 1, 1],
     [2, 2],
     [1, 1]
