@@ -9,6 +9,7 @@ function printNdarrayRecursive(
     nda: ndarray,
     stringify: (number) => string, 
     excludes: [number, number][],
+    printFunc: (line: string) => void
 ) {
     let exRight = (excludes[r][1] >= 0) ? (excludes[r][1]) : (shape[r] + excludes[r][1]);
     currentLine.push('[ ');
@@ -19,13 +20,13 @@ function printNdarrayRecursive(
                 currentLine.push(' ...... ');
                 for (let k = r+1; k < shape.length; ++k) currentLine.push(' ]...');
                 currentLine.push(',');
-                console.log(currentLine.join(''));
+                printFunc(currentLine.join(''));
                 currentLine.length = 0;
                 currentLine.push(prefixes[r+1]);
                 loc[r] = exRight - 1; 
             }
             else {
-                printNdarrayRecursive(prefixes, r+1, currentLine, loc, shape, nda, stringify, excludes);
+                printNdarrayRecursive(prefixes, r+1, currentLine, loc, shape, nda, stringify, excludes, printFunc);
             }
             ++loc[r];
         }
@@ -50,14 +51,14 @@ function printNdarrayRecursive(
 
     if (r > 0 && loc[r-1] < shape[r-1] - 1) {
         currentLine.push(' ],');
-        console.log(currentLine.join(''));
+        printFunc(currentLine.join(''));
         currentLine.length = 0;
         currentLine.push(prefixes[r]);
     }
     else {
         currentLine.push(' ]');
         if (r == 0) {
-            console.log(currentLine.join(''));
+            printFunc(currentLine.join(''));
             currentLine.length = 0;
         }
     }
@@ -82,7 +83,8 @@ export function printNdarray(
     name: string = '',
     stringify: (number) => string = (x:number) => x.toString(),
     excludeLastAxis: [number, number] = null,
-    excludeHiAxises: [number, number] = null
+    excludeHiAxises: [number, number] = null,
+    printFunc: (line: string) => void = function (line) { console.log(line); }
 ) {
     const shape = nda.shape;
     const rank = shape.length;
@@ -94,7 +96,7 @@ export function printNdarray(
     }
     
     console.log(`${name} of shape:${shape} = `);
-    printNdarrayRecursive(spacePrefix, 0, [], loc, shape, nda, stringify, excludes);
+    printNdarrayRecursive(spacePrefix, 0, [], loc, shape, nda, stringify, excludes, printFunc);
 }
 
 
