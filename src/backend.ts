@@ -4,10 +4,6 @@ import { TensorManager } from './tensor_manager';
 
 
 export interface Backend extends TensorManager{
-    //init(t: Tensor, initializer: (t: Tensor)=>void);
-    randomUniformEq(t: Tensor, a: number, b: number) : void;
-    randomNormEq(t: Tensor, mean: number, variance: number, seed: number) : void;
-
     //write(t: Tensor, values: StrictTensorLike) : void;
     //read(t: Tensor) : Promise<TypedArray>;
     readSync(t: Tensor) : TypedArray;

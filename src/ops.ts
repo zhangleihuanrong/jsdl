@@ -16,12 +16,23 @@ const neg = ENV.engine.backend.neg;
 const add = ENV.engine.backend.add;
 const multiply = ENV.engine.backend.multiply;
 const relu = ENV.engine.backend.relu;
-const readSync = ENV.engine.backend.readSync;
+const readDataSync = ENV.engine.backend.readSync;
 const reshape = ENV.engine.backend.reshape;
-const randomNormEq = ENV.engine.backend.randomNormEq;
-const randomUniformEq = ENV.engine.backend.randomUniformEq;
 const conv2d = ENV.engine.backend.conv2d;
 
 const tensor = Tensor.create;
+const randomNorm = Tensor.randomNorm;
+const randomUniform = Tensor.randomUniform;
+const truncatedNorm = Tensor.truncatedNorm;
 
-export { tensor, printTensor as print, transpose, conv2d, matMul, neg, add, multiply, relu, readSync, reshape, randomNormEq, randomUniformEq };
+export { tensor, randomNorm, randomUniform, truncatedNorm,
+    
+        readDataSync,
+
+        printTensor as print, 
+        
+        transpose, reshape, 
+        
+        matMul, neg, add, multiply, relu,
+
+        conv2d };

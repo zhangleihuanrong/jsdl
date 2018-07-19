@@ -44,6 +44,10 @@ export function getShape(val: any) : number[] {
     return shape;
 }
 
+export function shape2Size(shape: number[]) {
+    return shape.reduce((m, v) => m * v, 1.0);
+}
+
 export function createTypedArray<D extends DataType>(dtype: D, len: number) : DataTypeMap[D] {
     if (dtype === 'float32') {
         return new Float32Array(len);

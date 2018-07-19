@@ -5,9 +5,6 @@ import { ENV } from '../environments';
 import * as ndarray from 'ndarray';
 import * as nd_gemm from 'ndarray-gemm';
 import * as nd_ops from 'ndarray-ops';
-import { MPRandGauss } from '../utils/rand';
-
-import { iterateNdarray } from '../utils/ndarray_print';
 
 class NdarrayTensor implements BackendTensor {
     _array: ndarray;
@@ -73,22 +70,6 @@ class JsNdarrayBackend implements Backend {
             return ta;
         }
         return null;
-    }
-
-    randomUniformEq(t: Tensor, a: number, b: number) : void {
-        const ndt = ndarrayOf(t);
-        iterateNdarray(ndt, (arr: ndarray, loc: number[]) => {
-            const v = Math.random() * (b - a) + a;
-            arr.set(...loc, v);
-        })
-    }
-
-    randomNormEq(t: Tensor, mean: number, stdDev: number, seed: number) : void {
-        const dtype = t.dtype as 'float32' | 'int32';
-        const randGauss = new MPRandGauss(mean, stdDev, dtype, false, seed);
-        iterateNdarray(ndarrayOf(t), (ndt:ndarray, loc:number[]) => {
-            ndt.set(...loc, randGauss.nextValue());
-        })
     }
 
     transpose(x: Tensor, perm: number[]): Tensor {
