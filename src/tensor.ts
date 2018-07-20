@@ -168,7 +168,7 @@ export class Tensor {
         return this.shape.length;
     }
 
-    print(number2string: (x: number) => string = null, 
+    print(number2string: (x: number) => string = null,
           excludeLastAxis: [number, number] = null,
           excludeHiAxises: [number, number] = null) {
         if (this.data) {

@@ -29,6 +29,25 @@ function ndarrayOf(t: Tensor) : ndarray {
     return (t.data as NdarrayTensor)._array;
 }
 
+function rangedArray(s: number) : number[] {
+    const arr = new Array(s);
+    for (let i = 0; i < s; ++i) arr[i] = i;
+    return arr;
+}
+
+function broadCastedNdarray(a: ndarray, newShape: number[]) : ndarray {
+    a = a.transpose(...rangedArray(a.shape.length));
+    const shape : number[] = a.shape;
+    const strides : number[] = a.stride;
+    shape.forEach((orig, i) => {
+        if (orig == 1 && newShape[i] > 1) {
+            strides[i] = 0;
+        }
+    });
+    a.shape = newShape;
+    return a;
+}
+
 function nd_pad(x: ndarray, paddings: [number, number][], padVal: number = 0) : ndarray {
     //TODO: check parameters
     const padTotal = paddings.reduce((sum, p) => sum + p[0] + p[1], 0);
@@ -113,7 +132,6 @@ class JsNdarrayBackend implements Backend {
         return y;
     }
 
-    // TODO: support better broadcasting...
     add(a: Tensor, b: Tensor): Tensor {
         const backA = ndarrayOf(a);
         const backB = ndarrayOf(b);
@@ -122,20 +140,19 @@ class JsNdarrayBackend implements Backend {
         if (backA.shape.length == backB.shape.length) {
             // check shape are same
             nd_ops.add(backC, backA, backB);
-        } else {
-            nd_ops.assign(backC, backA);
-            const flatB = (this.reshape(b, [-1])).data as ndarray;;
-            const flatC = (this.reshape(c, [backC.shape[0], -1])).data as ndarray;
-            for (let i  = 0; i < flatC.shape[1]; i++) {
-                const col = flatC.lo(0, i).hi(flatC.shape[0], 1);
-                let res = '';
-                for (let r = 0; r < flatC.shape[0]; r++) {
-                    res += (res.length > 0) ? ', ' : '';
-                    res += '' + col.get(r, 0);
-                }
-                console.log(res);
-                nd_ops.addseq(col, flatB.get(i));
-            }
+        } 
+        else if (backB.shape.length == 0) {
+            nd_ops.adds(backC, backA, backB.data[0]);
+        }
+        else {
+            // TODO: support better broadcasting...
+            const rshape = [];
+            for (let i = 0, limit = backA.shape.length - backB.shape.length; i < limit; ++i) rshape.push(1);
+            backB.shape.forEach((v) => rshape.push(v));
+            const rtb = this.reshape(b, rshape);
+            const ndrtb = ndarrayOf(rtb);
+            const bb = broadCastedNdarray(ndrtb, backA.shape);
+            nd_ops.add(backC, backA, bb);
         }
         c.name = `Tensor${c.id}_add_${a.id}_${b.id}`;
         return c;
@@ -202,10 +219,9 @@ class JsNdarrayBackend implements Backend {
         }
 
         const r = Tensor.create(resultTypedArray, [batchSize, outRows, outCols, outChannels]);
-        r.name = `Tensor${r.id}_conv2D_${x.id}`;
+        r.name = `Tensor${r.id}_conv2D_${x.id}_${filter.id}`;
         return r;
     }
-
 
     neg(x: Tensor): Tensor {
         const ndx = ndarrayOf(x);

@@ -16,10 +16,11 @@ const neg = ENV.engine.backend.neg;
 const add = ENV.engine.backend.add;
 const multiply = ENV.engine.backend.multiply;
 const relu = ENV.engine.backend.relu;
-const readDataSync = ENV.engine.backend.readSync;
+const readSync = ENV.engine.backend.readSync;
 const reshape = ENV.engine.backend.reshape;
 const conv2d = ENV.engine.backend.conv2d;
 
+// static Tensor methods
 const tensor = Tensor.create;
 const randomNorm = Tensor.randomNorm;
 const randomUniform = Tensor.randomUniform;
@@ -27,7 +28,7 @@ const truncatedNorm = Tensor.truncatedNorm;
 
 export { tensor, randomNorm, randomUniform, truncatedNorm,
     
-        readDataSync,
+        readSync,
 
         printTensor as print, 
         

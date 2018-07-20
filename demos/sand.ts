@@ -126,7 +126,7 @@ const goldb = [ // for padding [1,1,1,1]
     +0.5, +1.5, -0.5,
     +1.0, -1.0, +0.0
 ];
-  
+
 testConv2D(
     tf.tensor(ima, [1, 1, 4, 4]),
     tf.tensor(flta, [2, 1, 2, 2]),

@@ -81,22 +81,34 @@ function getExcludes(rank: number, excludeLastAxis: [number, number], excludeHiA
 export function printNdarray(
     nda: ndarray,          
     name: string = '',
-    stringify: (number) => string = (x:number) => x.toString(),
+    num2string: (number) => string = null, 
     excludeLastAxis: [number, number] = null,
     excludeHiAxises: [number, number] = null,
+    leftMargin: number = 2,
     printFunc: (line: string) => void = function (line) { console.log(line); }
 ) {
     const shape = nda.shape;
     const rank = shape.length;
+    num2string = (num2string) ? num2string : (x:number) => x.toString();
     const excludes = getExcludes(rank, excludeLastAxis, excludeHiAxises);
     const loc = new Array(rank).fill(0);
-    const spacePrefix = new Array(rank).fill("");
+    const spacePrefix = new Array(rank+1).fill('');
+    if (rank >= 1) spacePrefix[0] = (new Array(leftMargin+1)).fill(' ').join('').toString();
     for (let i = 1; i < rank; ++i) {
         spacePrefix[i] = `${spacePrefix[i-1]}  `; // two spaces
     }
     
     console.log(`${name} of shape:${shape} = `);
-    printNdarrayRecursive(spacePrefix, 0, [], loc, shape, nda, stringify, excludes, printFunc);
+    const currentline = [spacePrefix[0]];
+    if (rank <= 0) {
+        const s = num2string(nda.data[0] as number);
+        currentline.push(s);
+        printFunc(currentline.join(''));
+        currentline.length = 0;
+    }
+    else {
+        printNdarrayRecursive(spacePrefix, 0, currentline, loc, shape, nda, num2string, excludes, printFunc);
+    }
 }
 
 

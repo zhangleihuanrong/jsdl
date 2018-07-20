@@ -21,6 +21,15 @@
             "outFiles": [
                 "${workspaceFolder}/**/*.js"
             ]
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "basic_tensor_samples",
+            "program": "${workspaceFolder}/dist/demos/basic_tensor_samples.js",
+            "outFiles": [
+                "${workspaceFolder}/**/*.js"
+            ]
         }
     ]
 }
