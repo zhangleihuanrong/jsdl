@@ -29,6 +29,7 @@ function ndarrayOf(t: Tensor) : ndarray {
     return (t.data as NdarrayTensor)._array;
 }
 
+// TODO: move all ndarray related basic to seperate files.
 function rangedArray(s: number) : number[] {
     const arr = new Array(s);
     for (let i = 0; i < s; ++i) arr[i] = i;
