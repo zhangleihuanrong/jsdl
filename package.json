@@ -2,12 +2,10 @@
   "name": "jsdl",
   "version": "1.0.0",
   "description": "Java Script for Deep Learning.",
-  "main": "index.js",
-  "directories": {
-    "test": "test"
-  },
+  "private": true,
   "scripts": {
-    "prepare": "tsc",
+    "webpack": "webpack --config webpack.config.js",
+    "prepare": "tsc && copyfiles demos/**/*.html demos/**/*.js demos/**/*.css dist/",
     "box": "node ./dist/demos/sand.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -15,7 +13,7 @@
     "type": "git",
     "url": "git+https://github.com/zhangleihuanrong/jsdl.git"
   },
-  "author": "",
+  "author": "Zhang Huanrong",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/zhangleihuanrong/jsdl/issues"
@@ -29,6 +27,9 @@
   },
   "devDependencies": {
     "@types/node": "^10.5.2",
-    "typescript": "^2.9.2"
+    "copyfiles": "^2.0.0",
+    "typescript": "^2.9.2",
+    "webpack": "^4.16.2",
+    "webpack-cli": "^3.1.0"
   }
 }
