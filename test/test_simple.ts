@@ -1,6 +1,4 @@
-const chai = require('chai');
-const assert = chai.assert;
-const expect = chai.expect;
+import {assert} from 'chai';
 
 describe('Simple Test in JS', function() {
     it('Good Luck should work!', function() {

@@ -5,9 +5,10 @@
   "private": true,
   "scripts": {
     "webpack": "webpack --config webpack.config.js",
-    "prepare": "tsc && copyfiles demos/**/*.html demos/**/*.js demos/**/*.css test/**/*.* dist/",
+    "prepare": "tsc && copyfiles demos/**/*.html demos/**/*.js demos/**/*.css dist/",
     "box": "node ./dist/demos/sand.js",
-    "test": "mocha ./test/test_*.js"
+    "test": "mocha ./dist/test/test_*.js",
+    "chrome-test" : "karma start karma.conf.js --single-run"
   },
   "repository": {
     "type": "git",
@@ -26,6 +27,8 @@
     "seedrandom": "^2.4.3"
   },
   "devDependencies": {
+    "@types/chai": "^4.1.4",
+    "@types/mocha": "^5.2.5",
     "@types/node": "^10.5.2",
     "chai": "^4.1.2",
     "copyfiles": "^2.0.0",

@@ -22,7 +22,7 @@ function loadTensor(pathName: string, shape: number[]) : Tensor {
 function isNumberNotSame(a: number, b: number) : Boolean {
     const aa = Math.abs(a);
     const ab = Math.abs(b);
-    return ((Math.max(aa, ab) >= 1e-6) && (Math.abs(a - b)/Math.max(aa, ab) > 0.15));
+    return ((Math.max(aa, ab) >= 1e-26) && (Math.abs(a - b)/Math.max(aa, ab) > 0.001));
 }
 
 function arraysEqual(a: number[], b: number[]) : boolean {

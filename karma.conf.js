@@ -10,68 +10,69 @@ module.exports = function(config) {
     // base path that will be used to resolve all patterns (eg. files, exclude)
     basePath: '',
 
+    plugins: [
+      require("karma-mocha"),
+      require("karma-webpack"),
+      require("karma-chrome-launcher"),
+      require("karma-mocha-reporter"),
+    ],
 
     // frameworks to use
     // available frameworks: https://npmjs.org/browse/keyword/karma-adapter
-    frameworks: ['mocha'],
+    frameworks: [ 'mocha' ],
 
 
     // list of files / patterns to load in the browser
     files: [
-      'test/test_simple.js'
+      'dist/test/test_*.js'
     ],
 
 
-    // list of files / patterns to exclude
-    exclude: [
-    ],
+    // // list of files / patterns to exclude
+    // exclude: [
+    // ],
 
 
     // preprocess matching files before serving them to the browser
     // available preprocessors: https://npmjs.org/browse/keyword/karma-preprocessor
     preprocessors: {
-      'test/test_simple.js' : ['webpack']
+      'dist/test/test_*.js' : [ 'webpack' ]
     },
 
     webpack: {
-      // webpack configuration
-      module: {
-        loaders: [
-          {test: /\.css$/, loader: "style!css"},
-          {test: /\.less$/, loader: "style!css!less"}
-        ],
-        postLoaders: [{
-          test: /\.js/,
-          exclude: /(test|node_modules|bower_components)/,
-          loader: 'istanbul-instrumenter'
-        }]
-      },
-      resolve: {
-        modulesDirectories: [
-          "",
-          "src",
-          "node_modules"
-        ]
-      }
+      // // webpack configuration
+      // module: {
+      //   loaders: [
+      //     {test: /\.css$/, loader: "style!css"},
+      //     {test: /\.less$/, loader: "style!css!less"}
+      //   ],
+      //   postLoaders: [{
+      //     test: /\.js/,
+      //     exclude: /(test|node_modules|bower_components)/,
+      //     loader: 'istanbul-instrumenter'
+      //   }]
+      // },
+      // resolve: {
+      //   modulesDirectories: [
+      //     "",
+      //     "dist/src",
+      //     "node_modules"
+      //   ]
+      // }
     },
     
     webpackMiddleware: {
       // webpack-dev-middleware configuration
-      noInfo: true
+      stats: 'errors-only',
+      // noInfo: true
     },
    
-    plugins: [
-      require("karma-webpack"),
-      require("istanbul-instrumenter-loader"),
-      require("karma-mocha"),
-      require("karma-mocha-reporter")
-    ],
     
 
     // test results reporter to use
     // possible values: 'dots', 'progress'
     // available reporters: https://npmjs.org/browse/keyword/karma-reporter
-    reporters: ['progress'],
+    reporters: ['mocha'],
 
 
     // web server port
