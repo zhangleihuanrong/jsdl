@@ -2,10 +2,10 @@ const path = require('path');
 const webpack = require('webpack');
 
 module.exports = {
-    entry: './dist/demos/basic_tensor_samples.js',
+    entry: './dist/src/index.js',
     output: {
-        path: path.resolve(__dirname, 'dist', 'web'),
-        filename: 'main.bundle.js',
+        path: path.resolve(__dirname, 'dist', 'bundle'),
+        filename: 'jsdl.js',
     },
     stats: {
         colors: true

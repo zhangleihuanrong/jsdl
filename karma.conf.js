@@ -12,19 +12,21 @@ module.exports = function(config) {
 
     plugins: [
       require("karma-mocha"),
-      require("karma-webpack"),
+      // require("karma-webpack"),
       require("karma-chrome-launcher"),
       require("karma-mocha-reporter"),
+      require("karma-typescript"),
     ],
 
     // frameworks to use
     // available frameworks: https://npmjs.org/browse/keyword/karma-adapter
-    frameworks: [ 'mocha' ],
+    frameworks: [ 'mocha', 'karma-typescript' ],
 
 
     // list of files / patterns to load in the browser
     files: [
-      'dist/test/test_*.js'
+      'src/**/*.ts',
+      'test/test_*.ts'
     ],
 
 
@@ -36,36 +38,42 @@ module.exports = function(config) {
     // preprocess matching files before serving them to the browser
     // available preprocessors: https://npmjs.org/browse/keyword/karma-preprocessor
     preprocessors: {
-      'dist/test/test_*.js' : [ 'webpack' ]
+      'src/**/*.ts' : [ 'karma-typescript' ],
+      'test/test_*.ts' : [ 'karma-typescript' ]
     },
 
-    webpack: {
-      // // webpack configuration
-      // module: {
-      //   loaders: [
-      //     {test: /\.css$/, loader: "style!css"},
-      //     {test: /\.less$/, loader: "style!css!less"}
-      //   ],
-      //   postLoaders: [{
-      //     test: /\.js/,
-      //     exclude: /(test|node_modules|bower_components)/,
-      //     loader: 'istanbul-instrumenter'
-      //   }]
-      // },
-      // resolve: {
-      //   modulesDirectories: [
-      //     "",
-      //     "dist/src",
-      //     "node_modules"
-      //   ]
-      // }
+    karmaTypescriptConfig: {
+      tsconfig: 'tsconfig.json',
+      reports: {} // Do not produce coverage html.
     },
+
+    // webpack: {
+    //   // // webpack configuration
+    //   // module: {
+    //   //   loaders: [
+    //   //     {test: /\.css$/, loader: "style!css"},
+    //   //     {test: /\.less$/, loader: "style!css!less"}
+    //   //   ],
+    //   //   postLoaders: [{
+    //   //     test: /\.js/,
+    //   //     exclude: /(test|node_modules|bower_components)/,
+    //   //     loader: 'istanbul-instrumenter'
+    //   //   }]
+    //   // },
+    //   // resolve: {
+    //   //   modulesDirectories: [
+    //   //     "",
+    //   //     "dist/src",
+    //   //     "node_modules"
+    //   //   ]
+    //   // }
+    // },
     
-    webpackMiddleware: {
-      // webpack-dev-middleware configuration
-      stats: 'errors-only',
-      // noInfo: true
-    },
+    // webpackMiddleware: {
+    //   // webpack-dev-middleware configuration
+    //   stats: 'errors-only',
+    //   // noInfo: true
+    // },
    
     
 
