@@ -14,7 +14,7 @@ class NdarrayTensor implements BackendTensor {
     }
 
     shape(): number[] {
-        return this._array.shape;;
+        return this._array.shape;
     }
     dtype(): DataType {
         // TODO: not fully compatible
