@@ -1,9 +1,9 @@
 import * as fs from 'fs';
 
-import * as tf from '../src/index';
-import {Tensor} from '../src/index';
+import * as tf from '../../src/index';
+import {Tensor} from '../../src/index';
 
-import {iterateNdarray} from '../src/utils/ndarray_print';
+import {iterateNdarray} from '../../src/utils/ndarray_print';
 
 import * as ndarray from 'ndarray';
 

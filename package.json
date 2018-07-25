@@ -6,10 +6,10 @@
   "scripts": {
     "webpack": "webpack --config webpack.config.js",
     "prepare": "tsc && copyfiles test/**/*.html demos/**/*.js demos/**/*.css dist/",
-    "box": "node ./dist/demos/sand.js",
+    "scratch": "node ./dist/samples/scratch/scratch.js",
     "test": "mocha -r ts-node/register test/test_*.ts",
-    "chrome-test": "karma start karma.test.conf.js --single-run",
-    "chrome-test-watch": "karma start karma.test.conf.js --watch"
+    "chrome-test": "karma start karma.ts.conf.js",
+    "webpack-test": "karma start karma.test.conf.js"
   },
   "repository": {
     "type": "git",

@@ -208,5 +208,8 @@ class WebGLBackend implements Backend {
 
 const backendName: string = "Backend_WebGL";
 const backendScore: number = 16;
-const backendWebGl = new WebGLBackend() as Backend;
-ENV.registerBackend(backendName, backendWebGl, backendScore);
+const backendWebGl = new WebGLBackend();
+console.info(JSON.stringify(backendWebGl));
+if (backendWebGl._isSupported) {
+    ENV.registerBackend(backendName, backendWebGl, backendScore);
+}
