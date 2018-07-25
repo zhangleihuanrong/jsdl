@@ -1,8 +1,11 @@
-import { BackendTensor, DataType, TypedArray } from "../types";
-import * as ndarray from 'ndarray';
+import { ENV } from "../environments";
+
+import { BackendTensor, DataType, TypedArray, createTypeArrayForShape, Shape } from "../types";
 import { Backend } from "../backend";
 import { Tensor } from "../tensor";
-import { ENV } from "../environments";
+import * as ndarray from 'ndarray';
+import * as nd_ops from 'ndarray-ops';
+import * as nd_gemm from 'ndarray-gemm';
 
 class WebGLTensor implements BackendTensor {
     _array: ndarray;
@@ -25,6 +28,30 @@ class WebGLTensor implements BackendTensor {
     }
 };
 
+// TODO: move all ndarray related basic to seperate files.
+function rangedArray(s: number) : number[] {
+    const arr = new Array(s);
+    for (let i = 0; i < s; ++i) arr[i] = i;
+    return arr;
+}
+
+function broadCastedNdarray(a: ndarray, newShape: number[]) : ndarray {
+    a = a.transpose(...rangedArray(a.shape.length));
+    const shape : number[] = a.shape;
+    const strides : number[] = a.stride;
+    shape.forEach((orig, i) => {
+        if (orig == 1 && newShape[i] > 1) {
+            strides[i] = 0;
+        }
+    });
+    a.shape = newShape;
+    return a;
+}
+
+
+function ndarrayOf(t: Tensor) : ndarray {
+    return (t.data as WebGLTensor)._array;
+}
 
 class WebGLBackend implements Backend {
     _isSupported: boolean = false;
@@ -35,27 +62,24 @@ class WebGLBackend implements Backend {
     _refs = { textures: [], buffers: [] };
 
     constructor() {
-        this._isSupported = false
-
         if (typeof window !== 'undefined') {
-          this._canvas = document.createElement('canvas')
-          this._context = this._canvas.getContext('webgl2') as WebGLRenderingContext;
-    
-          const gl = this._context;
-          if (gl) {
-            this._isSupported = true
-            gl.getExtension('EXT_color_buffer_float')
-            this.MAX_TEXTURE_SIZE = gl.getParameter(gl.MAX_TEXTURE_SIZE)
-            this.MAX_TEXTURE_IMAGE_UNITS = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS)
-            this.init()
+          this._canvas = document.createElement('canvas');
+          if (this._canvas.getContext('webgl2')) {
+            this._context = this._canvas.getContext('webgl2') as WebGLRenderingContext;
+            this._isSupported = true;
+            this._context.getExtension('EXT_color_buffer_float');
+            this.MAX_TEXTURE_SIZE = this._context.getParameter(this._context.MAX_TEXTURE_SIZE);
+            this.MAX_TEXTURE_IMAGE_UNITS = this._context.getParameter(this._context.MAX_TEXTURE_IMAGE_UNITS);
+            this.init();
           } else {
-            console.log('Unable to initialize WebGL2 -- your browser may not support it.')
+            console.warn('Unable to initialize WebGL2 -- your browser may not support it.');
           }
         }
     }
-    init() {
 
+    init() {
     }
+
     wrap(t: Tensor, backendTensor: BackendTensor): void {
         t.data = backendTensor;
     }
@@ -86,7 +110,7 @@ class WebGLBackend implements Backend {
     transpose(x: Tensor, perm: number[]): Tensor {
         const bt = ndarrayOf(x);
         const trans = bt.transpose(...perm);
-        const y = Tensor.fromBackend(new NdarrayTensor(trans));
+        const y = Tensor.fromBackend(new WebGLTensor(trans));
         y.name = `Tensor${y.id}_transpose_${x.id}`;
         return y;
     }
@@ -149,22 +173,40 @@ class WebGLBackend implements Backend {
         c.name = `Tensor${c.id}_add_${a.id}_${b.id}`;
         return c;
     }
-    neg(a: Tensor): Tensor {
-        throw new Error("Method not implemented.");
+    neg(x: Tensor): Tensor {
+        const ndx = ndarrayOf(x);
+        const y = Tensor.create(null, x.shape, x.dtype);
+        const ndy = ndarrayOf(y);
+        nd_ops.neg(ndy, ndx);
+        y.name = `Tensor${y.id}_neg_${x.id}`;
+        return y;
     }
+
     multiply(a: Tensor, b: Tensor): Tensor {
-        throw new Error("Method not implemented.");
+        const nda = ndarrayOf(a);
+        const ndb = ndarrayOf(b);
+        const c = Tensor.create(null, a.shape, a.dtype);
+        const ndc = ndarrayOf(c);
+        nd_ops.multiply(ndc, nda, ndb);
+        c.name = `Tensor${c.id}_multiply_${a.id}_${b.id}`;
+        return c;
     }
+
     relu(x: Tensor): Tensor {
-        throw new Error("Method not implemented.");
-    }
+        const ndx = ndarrayOf(x);
+        const y = Tensor.create(null, x.shape, x.dtype);
+        const ndy = ndarrayOf(y);
+        nd_ops.maxs(ndy, ndx, 0);
+        y.name = `Tensor${y.id}_relu_${x.id}`;
+        return y;
+    }    
     conv2d(x: Tensor, filter: Tensor, strides: number | [number, number], padding: number[], dataFormat: "NHWC" | "NCHW", dialations: number | [number, number]): Tensor {
         throw new Error("Method not implemented.");
     }
 };
 
 
-const backendName: string = "WebGL_Backend";
-const backendScore: number = 2;
-const backendJsNdarray = new WebGLBackend() as Backend;
-ENV.registerBackend(backendName, backendJsNdarray, backendScore);
+const backendName: string = "Backend_WebGL";
+const backendScore: number = 16;
+const backendWebGl = new WebGLBackend() as Backend;
+ENV.registerBackend(backendName, backendWebGl, backendScore);

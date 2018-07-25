@@ -1,7 +1,8 @@
+import { ENV } from '../environments';
 import { createTypeArrayForShape, TypedArray, DataType, Shape, BackendTensor } from '../types';
 import { Tensor } from '../tensor';
 import { Backend } from '../backend';
-import { ENV } from '../environments';
+
 import * as ndarray from 'ndarray';
 import * as nd_gemm from 'ndarray-gemm';
 import * as nd_ops from 'ndarray-ops';
@@ -253,7 +254,7 @@ class JsNdarrayBackend implements Backend {
     }
 }
 
-const backendName: string = "JS_ndarray";
+const backendName: string = "Backend_JSCPU";
 const backendScore: number = 2;
 const backendJsNdarray = new JsNdarrayBackend() as Backend;
 ENV.registerBackend(backendName, backendJsNdarray, backendScore);

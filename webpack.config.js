@@ -1,8 +1,6 @@
 const path = require('path');
 const glob = require('glob');
 
-//const webpack = require('webpack');
-
 module.exports = {
     entry: {
         jsdl: './src/index.ts',
@@ -25,7 +23,7 @@ module.exports = {
         colors: true
     },
     node: {
-        fs: 'empty'
+        fs: "empty"
     },
     devtool: 'source-map'
 };

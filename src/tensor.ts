@@ -145,7 +145,7 @@ export class Tensor {
     }
 
     get name(): string {
-        return (this._name && this._name.length > 0) ? this._name : `Tensor${this.id}`;
+        return (this._name && this._name.length > 0) ? this._name : `Tensor-${this.id}`;
     }
 
     set name(value: string) {
