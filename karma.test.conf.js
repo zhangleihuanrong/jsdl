@@ -1,3 +1,5 @@
+const path = require('path');
+
 // Karma configuration
 // Generated on Mon Jul 23 2018 17:07:41 GMT-0700 (Pacific Daylight Time)
 module.exports = function(config) {
@@ -10,18 +12,17 @@ module.exports = function(config) {
       require("karma-mocha"),
       require("karma-chrome-launcher"),
       require("karma-mocha-reporter"),
-      require("karma-typescript"),
+      require("karma-sourcemap-loader"),
     ],
 
     // frameworks to use
     // available frameworks: https://npmjs.org/browse/keyword/karma-adapter
-    frameworks: [ 'mocha', 'karma-typescript' ],
+    frameworks: [ 'mocha' ],
 
 
     // list of files / patterns to load in the browser
     files: [
-      'src/**/*.ts',
-      'test/test_*.ts'
+      'dist/bundle/test.js'
     ],
 
     // list of files / patterns to exclude
@@ -30,15 +31,37 @@ module.exports = function(config) {
 
     // preprocess matching files before serving them to the browser
     // available preprocessors: https://npmjs.org/browse/keyword/karma-preprocessor
+
     preprocessors: {
-      'src/**/*.ts' : [ 'karma-typescript' ],
-      'test/test_*.ts' : [ 'karma-typescript' ]
+      '**/*.js' : [ 'sourcemap' ],
     },
 
-    karmaTypescriptConfig: {
-      tsconfig: 'tsconfig.json',
-      reports: {} // Do not produce coverage html.
-    },
+    // webpack: {
+    //   entry: path.join(__dirname, './test/test_tensor_basic.ts'),
+    //   resolve: {
+    //     extensions: ['.tsx', '.ts', '.js'],
+    //   },
+    //   module : {
+    //     rules: [
+    //       { 
+    //         test: /\.tsx?$/, 
+    //         loader: 'ts-loader', 
+    //         exclude: '/node_modules/'
+    //       },
+    //     ]
+    //   },
+    //   output: {
+    //     filename: 'test_bundle.js',
+    //     path: path.resolve(__dirname, 'dist', 'bundle')
+    //   }
+    // },
+
+    // webpackMiddleware: {
+    //   // webpack-dev-middleware configuration
+    //   // i. e.
+    //   stats: 'errors-only'
+    // },
+    
 
     // test results reporter to use
     // possible values: 'dots', 'progress'
@@ -65,7 +88,17 @@ module.exports = function(config) {
 
     // start these browsers
     // available browser launchers: https://npmjs.org/browse/keyword/karma-launcher
-    browsers: ['Chrome'],
+    browsers: ['Chrome_Remote_Debug'],
+
+    customLaunchers: {
+      Chrome_Remote_Debug : {
+        base: 'Chrome',
+        flags: [ 
+          '--show', 
+          '--remote-debugging-port=9222' 
+        ]
+      }
+    },
 
 
     // Continuous Integration mode

@@ -1,14 +1,31 @@
 const path = require('path');
-const webpack = require('webpack');
+const glob = require('glob');
+
+//const webpack = require('webpack');
 
 module.exports = {
-    entry: './dist/src/index.js',
+    entry: {
+        jsdl: './src/index.ts',
+        test: glob.sync('./test/test_*.ts'),
+        demo:  './demos/sand.ts',
+    },
+    resolve: {
+        extensions: [".tsx", ".ts", ".js"]
+    },
+    module: {
+        rules: [
+            {test: /\.tsx?$/, loader: "ts-loader" }
+        ]
+    },
     output: {
         path: path.resolve(__dirname, 'dist', 'bundle'),
-        filename: 'jsdl.js',
+        filename: '[name].js',
     },
     stats: {
         colors: true
+    },
+    node: {
+        fs: 'empty'
     },
     devtool: 'source-map'
 };

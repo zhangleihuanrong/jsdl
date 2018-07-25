@@ -5,9 +5,21 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "type": "chrome",
+            "request": "attach",
+            "name": "Attach to Chrome (after karma start)",
+            "port": 9222,
+            "webRoot": "${workspaceFolder}",
+            "pathMapping": {
+                "/base/" : "${workspaceFolder}/",
+                "/" : "${workspaceFolder}",
+            },
+            "sourceMaps": true,
+        },
+        {
             "type": "node",
             "request": "launch",
-            "name": "Mocha Tests",
+            "name": "Mocha Tests (no browser using ts-node)",
             "program": "${workspaceFolder}/node_modules/mocha/bin/_mocha",
             "args": [
                 "-r",
@@ -28,26 +40,8 @@
             "name": "Launch Program",
             "program": "${workspaceFolder}/index.js",
             "outFiles": [
-                "${workspaceFolder}/**/*.js"
+                "${workspaceFolder}/dist/**/*.js"
             ]
         },
-        {
-            "type": "node",
-            "request": "launch",
-            "name": "sand",
-            "program": "${workspaceFolder}/dist/demos/sand.js",
-            "outFiles": [
-                "${workspaceFolder}/**/*.js"
-            ]
-        },
-        {
-            "type": "node",
-            "request": "launch",
-            "name": "basic_tensor_samples",
-            "program": "${workspaceFolder}/dist/demos/basic_tensor_samples.js",
-            "outFiles": [
-                "${workspaceFolder}/**/*.js"
-            ]
-        }
     ]
 }
