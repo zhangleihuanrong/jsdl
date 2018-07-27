@@ -7,7 +7,7 @@ import {ENV} from '../environments';
 import {Tensor} from '../tensor';
 import {BackendTensor, createTypeArrayForShape, DataType, Shape, TypedArray} from '../types';
 
-import * as vertexShaderSource from './webgl/vertexShader.glsl';
+import * as vertexShaderSource from './webgl/directPass.vertex.glsl';
 
 class WebGLTensor implements BackendTensor {
   //basic info
@@ -36,6 +36,40 @@ class WebGLTensor implements BackendTensor {
       this._shape = shape;
       this._dtype = dtype;
     }
+  }
+
+  calulateTexture2DShape(MAX_TEXTURE_SIZE: number) : boolean {
+    if (this._shape.length == 1) {
+      this._texW = 1;
+      this._texH = this._shape[0];
+      this._axisX = [];
+      this._axisY = [ 0 ];
+    }
+    else if (this._shape.length == 2) {
+      this._texW = this._shape[1];
+      this._texH = this._shape[0];
+      this._axisX = [ 1 ];
+      this._axisY = [ 0 ];
+    }
+    else {
+      // TODO: current is hacky
+      const m = Math.ceil(this._shape.length / 2.0);
+      this._texW = 1;
+      this._texH = 1;
+      this._axisX = [];
+      this._axisY = [];
+      for (let i = 0; i < m; ++i) {
+        this._texH *= this.shape[i];
+        this._axisY.push(i);
+      }
+      for (let i = m; i < this._shape.length; ++i) {
+        this._texW *= this.shape[i];
+        this._axisX.push(i);
+      }
+    }
+    return (this._texW <= MAX_TEXTURE_SIZE && 
+            this._texH <= MAX_TEXTURE_SIZE &&
+            this._axisX.length <= 4 && this._axisY.length <= 4);
   }
 
   shape(): number[] {
@@ -239,7 +273,42 @@ class WebGLBackend implements Backend {
     delete t.data;
   }
 
+
   /**
+   * Bind output texture
+   */
+  bindOutputTexture(outputTexture: WebGLTexture, shape: number[], framebuffer?: WebGLFramebuffer) {
+    const gl = this._glContext;
+    gl.viewport(0, 0, shape[1], shape[0]);
+    const activeFramebuffer = framebuffer || gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, activeFramebuffer);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, outputTexture, 0);
+    if (!framebuffer) gl.deleteFramebuffer(activeFramebuffer);
+  }
+
+  create2DGLTexture(bt: WebGLTensor): WebGLTexture {
+    const gl = this._glContext;
+
+    if (!bt._texture && bt.calulateTexture2DShape(this.MAX_TEXTURE_SIZE)) {
+      const texture = gl.createTexture();
+      const tt = (bt._dtype == 'int32') ? gl.INT : ((bt._dtype == 'bool')? gl.BYTE : gl.FLOAT);
+  
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, bt._texW, bt._texH, 0, gl.RED, tt, bt._array, 0);
+  
+      // clamp to edge
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      // no interpolation
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      bt._texture = texture;
+    }
+    return bt._texture;
+  }
+
+
+    /**
    * Reads pixel data from framebuffer
    */
   readData(shape: number[]) : Float32Array {
@@ -254,48 +323,37 @@ class WebGLBackend implements Backend {
     return new Float32Array(out);
   }
 
-  /**
-   * Bind output texture
-   */
-  bindOutputTexture(outputTexture: WebGLTexture, shape: number[], framebuffer?: WebGLFramebuffer) {
-    const gl = this._glContext;
-    gl.viewport(0, 0, shape[1], shape[0]);
-    const activeFramebuffer = framebuffer || gl.createFramebuffer();
-    gl.bindFramebuffer(gl.FRAMEBUFFER, activeFramebuffer);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, outputTexture, 0);
-    if (!framebuffer) gl.deleteFramebuffer(activeFramebuffer);
-  }
-
-   /**
-   * Create 2D WebGL2 texture
-   */
-  create2DGLTexture(bt: WebGLTensor) {
-    const gl = this._glContext;
- 
-    const tt = (bt._dtype == 'int32') ? gl.INT : ((bt._dtype == 'bool')? gl.BYTE : gl.FLOAT);
-    const texture = gl.createTexture();
-    this.storeRef(texture);
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, bt._shape[1], bt._shape[0], 0, gl.RED, tt, bt._array, 0);
-
-    // clamp to edge
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    // no interpolation
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-  }
   readSync(x: Tensor): TypedArray {
     let ndx = ndarrayOf(x);
     if (!ndx) {
-      const glt = backendTensorOf(x);
-      if (!glt || !(glt._texture)) {
+      const bt = backendTensorOf(x);
+      if (!bt || !(bt._texture)) {
         throw new Error('No memory data, nor gpu data!');
       }
       const gl = this._glContext;
-      // download data from texture and assign to ndx
-      const view = new Float32Array(x.shape[0] * x.shape[1] * 4);
-      gl.(0, 0, x.shape[1], x.shape[0], gl.RGBA, gl.FLOAT, view);
+
+      // Create a framebuffer backed by the texture
+      const framebuffer = gl.createFramebuffer();
+      try {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, bt._texture, 0);
+
+        // check if you can read from this type of texture.
+        if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE) {
+          throw new Error('Can not read from this type of texture.')
+        }
+        // Read the contents of the framebuffer (data stores the pixel data)
+        var data = new Float32Array(bt._texW * bt._texH * 4);
+        gl.readPixels(0, 0, bt._texW, bt._texH, gl.RGBA, gl.FLOAT, data);
+
+        // transform and copy to a new ndarray
+        // const view = new Float32Array(bt._texW * bt._texH);
+        // gl.texImage2D(0, 0, x.shape[1], x.shape[0], gl.RGBA, gl.FLOAT, view);
+      }
+      finally {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.deleteFramebuffer(framebuffer);
+      }
     }
     if (ndx) {
       const shape = ndx.shape;
