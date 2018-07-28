@@ -10,6 +10,7 @@ function printTensor(
     x.print(number2string, excludeLastAxis, excludeHiAxises);
 }
 
+// TODO: figure out 'this' handling issue
 const transpose =  ENV.engine.backend.transpose;
 const matMul = ENV.engine.backend.matMul;
 const neg = ENV.engine.backend.neg;

@@ -19,10 +19,8 @@
         "noFallthroughCasesInSwitch": true,
         "allowUnreachableCode": false,
         "experimentalDecorators": true,
-        //"typeRoots": [ "./types" ],
     },
     "include": [
-        "types/",
         "src/",
         "samples/",
         "demos/",

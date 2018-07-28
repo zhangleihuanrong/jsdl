@@ -5,7 +5,7 @@ import { printNdarray } from '../src/utils/ndarray_print';
 
 
 describe('Simple Test in JS', function() {
-    it('Good Luck should work!', function() {
+    it('Simple ndarray program should work!', function() {
         let a = ndarray(new Float32Array([1, 2, 3, 2, 2, 3]), [1, 2, 3]);
         printNdarray(a, 'a');
         
