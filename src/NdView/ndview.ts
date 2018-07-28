@@ -1,97 +1,139 @@
+import { assert as ASSERT } from '../utils/gadget';
 
-export interface ndvDataTypeMap {
-    float32: Float32Array;
-    int32: Int32Array;
-    bool: Uint8Array;
-    uint8clamp: Uint8ClampedArray;
-    string: string[];
-    number: number[];
-};
+// N Dimention View structure on plain array.
+// No data is stored or used here.
+export type NDArrayLike = number[] | boolean[] | string[] | Float32Array | Int32Array | Uint8Array | Uint8ClampedArray | Float64Array;
 
-export type ndvDataType = keyof ndvDataTypeMap;
-export type ndvArray = ndvDataTypeMap[ndvDataType];
+// Need support:
+// transpose in place,
+// slice in place when no repeat nor gather,
+// gather in place*,
+// repeat in place*
+//
+// gather & repeat: 
+//     possible status: 
+//         gather(core), 
+//         repeat(core), 
+//         repeat(gather(core))
+//     other operations:
+//         gather1(gather2(core)) => gather'(core)
+//         gather(repeat(core)) => gather'(core)
+//         gather1(repeat(gather2(core)) => gather'(core)
+//         repeat1(repeat2(*)) => repeat'(*)
+// So, if gather and repeat co-exists, apply gather first.
+//
+export class NDView<TARRAY extends NDArrayLike> {
+    data: TARRAY = null;
+    readonly coreShape: number[];
+    readonly coreStride: number[];
+    readonly coreOffset: number;
 
-export class NdView {
-    dtype: ndvDataType;
-    data: ndvArray;
-    shape: number[];
-    stride: number[];
-    offset: number;
+    readonly gather: number[][];
+    readonly repeat: number[];
 
-    readonly size: number;
+    readonly needRepeat: boolean;
+    readonly needGather: boolean;
 
-    constructor(arr: ndvArray, shape:number[], dtype?: ndvDataType) {
-        if (!shape || shape.some(v => v <= 0)) {
-            throw new Error('Dimensions must be positive!');
-        }
+    readonly coreSize: number; // size without considering the repeat
+    readonly size: number;    // size after repeated
+    readonly shape: number[]; // shape after repeat
 
-        this.data = arr || null;
-        this.shape = shape;
-        this.offset = 0;
-        if (!arr) {
-            this.dtype = dtype || 'float32';
-        }
-        else if (Array.isArray(arr)) {
-            if (arr.length == 0) {
-                this.dtype = 'number';
-                this.data = null;
-            }
-            else {
-                const fv: any = arr[0];
-                if (fv instanceof String) {
-                    this.dtype = 'string';
-                }
-                else if (fv instanceof Number) {
-                    this.dtype = 'number';
-                }
-                else {
-                    throw new Error('Wrong array type to construct!');
-                }
-            }
-        }
-        else if (arr instanceof Float32Array) {
-            dtype = 'float32';
-        }
-        else if (arr instanceof Int32Array) {
-            dtype = 'int32';
-        }
-        else if (arr instanceof Uint8Array) {
-            dtype = 'bool';
-        }
-        else if (arr instanceof Uint8ClampedArray) {
-            dtype = 'uint8clamp';
-        }
-        else {
-            throw new Error('wrong array type to construct!')
-        }
+    // data could be null
+    constructor(data: TARRAY, shape: number[],
+        stride: number[] = null, offset: number = 0,
+        gather: number[][] = null, repeat: number[] = null) {
+        const self = this;
+
+        ASSERT(shape != null && shape.every(v => v > 0), 'Dimensions must not null and all positive!');
+        this.coreShape = shape;
+        const rank = shape.length;
+        this.coreSize = shape.reduce((m, v) => m * v, 1);
 
         let s = 1;
-        this.stride.map(v => { const oldS = s;  s *= v;  return oldS; })
+        this.coreStride = stride || shape.map(v => (s *= v) / v);
+        ASSERT(this.coreStride.length == rank, 'strides must of same length as shape!');
+
+        this.gather = gather || new Array(rank).fill(null);
+        ASSERT(this.gather.length == rank, "gather array should of same length as shape!");
+        ASSERT(this.gather.every(a => a == null || Array.isArray(a)), "gather should be number[][]");
+        ASSERT(this.gather.every(a => a == null || a.every((v, i) => v >= 0 && v < self.shape[i])),
+            `gather array value out of bound`);
+        this.needGather = this.gather.some(a => a != null && a.length > 0);
+        const gsa = this.gather.map((a, i) => (a == null || a.length == 0) ? self.coreShape[i] : a.length);
+
+        this.repeat = repeat || new Array(rank).fill(1);
+        ASSERT(this.repeat.every(v => v > 0), "repeat must all be positive!");
+        this.needRepeat = this.repeat.some(v => v != 1);
+
+        this.shape = gsa.map((w, i) => w * self.repeat[i]);
         this.size = this.shape.reduce((m, v) => m * v, 1);
+        
+        this.data = data;
     }
 
-    index(...pos: number[]) : number {
-        return this.stride.reduce((p, s, i) => p + s * pos[i], this.offset);
+    // no error check for performance
+    private coreIndexOnAxis(outerIndex: number, axis: number) : number {
+        const gatherOnAxis = (this.gather[axis] == null || this.gather[axis].length == 0);
+        const gatherWide =  gatherOnAxis ? this.gather[axis].length : this.coreShape[axis];
+        let index = outerIndex % gatherWide;
+        if (gatherOnAxis) index = this.gather[axis][index];
+        return index;
+     }
+
+    // return the index in the core flat array for given subscription array
+    // no error check here
+    index(...pos: number[]): number {
+        const self = this;
+        return this.coreStride.reduce((start, strideWide, axis) => {
+            const index = this.coreIndexOnAxis(pos[axis], axis);
+            return start + strideWide * index;
+        }, self.coreOffset);
     }
 
-    transpose(perm?: number[]) : NdView {
-        const rank = this.shape.length;
+    transpose(perm?: number[]): NDView<TARRAY> {
+        const self = this;
+        const rank = this.coreShape.length;
         perm = perm || ((new Array(rank)).map((v, i) => rank - 1 - i));
-        if (perm.length != rank) throw new Error('Wrong permutation size!');
-        const chk = (new Array(rank)).fill(0);
-        perm.forEach(v => {
-            if (v >= 0 && v < rank) ++chk[v];
-        });
-        if (chk.some(v => v !== 1)) throw new Error('Wrong permutation!');
-        if (chk.every((v, i) => v == i)) return this;
+        ASSERT(perm.length == rank, 'Wrong permutation size!');
 
-        const nshape = ((new Array(rank)).map((v, i) => this.shape[perm[i]]));
-        const nstride = ((new Array(rank)).map((v, i) => this.stride[perm[i]]));
-        const nv = new NdView(this.data, nshape, this.dtype);
-        nv.stride = nstride;
-        nv.offset = this.offset;
+        const check = new Array(rank).fill(0);
+        perm.forEach(v => { if (v >= 0 && v < rank)++(check[v]); });
+        ASSERT(check.every(v => v === 1), 'Wrong permutation!');
+        if (check.every((v, i) => v == i)) return this;
+
+        const nshape = self.coreShape.map((v, i, a) => a[perm[i]]);
+        const nstride = self.coreStride.map((v, i, a) => a[perm[i]]);
+        const nGather = this.gather.map((v, i, a) => a[perm[i]]);
+        const nRepeat = self.repeat.map((v, i, a) => a[perm[i]]);
+        const nv = new NDView(this.data, nshape, nstride, this.coreOffset, nGather, nRepeat);
         return nv;
     }
-    
 
+    pick(indices: number[]): NDView<TARRAY> {
+        const self = this;
+        ASSERT(indices.length == this.coreShape.length, "pick should give indices of same length as shape!");
+        ASSERT(indices.every((v, i) => v < self.shape[i]), "pick should use value less than axis' size or negitive for keep");
+        const rank = this.coreShape.length;
+
+        const nShape: number[] = [];
+        const nStride: number[] = [];
+        const nGather: number[][] = [];
+        const nRepeat: number[] = [];
+
+        let nOffset = self.coreOffset;
+        for (let axis = 0; axis < rank; ++axis) {
+            if (indices[axis] >= 0) {
+                const ci = this.coreIndexOnAxis(indices[axis], axis);
+                nOffset += this.coreStride[axis] * ci;
+            }
+            else {
+                nShape.push(this.coreShape[axis]);
+                nStride.push(this.coreStride[axis]);
+                nGather.push(this.gather[axis]);
+                nRepeat.push(this.repeat[axis]);
+            }
+        }
+        return new NDView(this.data, nShape, nStride, nOffset, nGather, nRepeat);
+    }
 };
+
