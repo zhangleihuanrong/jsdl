@@ -49,8 +49,7 @@ export class NDView<TARRAY extends NDArrayLike> {
         const rank = shape.length;
         this.coreSize = shape.reduce((m, v) => m * v, 1);
 
-        let s = 1;
-        this.coreStride = stride || shape.map(v => (s *= v) / v);
+        this.coreStride = stride || NDView.buildStride(shape);
         ASSERT(this.coreStride.length == rank, 'strides must of same length as shape!');
 
         this.gather = gather || new Array(rank).fill(null);
@@ -68,12 +67,21 @@ export class NDView<TARRAY extends NDArrayLike> {
         this.shape = gsa.map((w, i) => w * self.repeat[i]);
         this.size = this.shape.reduce((m, v) => m * v, 1);
         
+        this.coreOffset = offset;
         this.data = data;
+    }
+
+    static buildStride(shape: number[]) : number[] {
+        const stride: number[] = shape.map(v => 1);
+        for (let i = shape.length - 2; i >= 0; --i) {
+            stride[i] = shape[i+1] * stride[i+1];
+        }
+        return stride;
     }
 
     // no error check for performance
     private coreIndexOnAxis(outerIndex: number, axis: number) : number {
-        const gatherOnAxis = (this.gather[axis] == null || this.gather[axis].length == 0);
+        const gatherOnAxis = (this.gather[axis] != null && this.gather[axis].length >= 0);
         const gatherWide =  gatherOnAxis ? this.gather[axis].length : this.coreShape[axis];
         let index = outerIndex % gatherWide;
         if (gatherOnAxis) index = this.gather[axis][index];
@@ -88,6 +96,11 @@ export class NDView<TARRAY extends NDArrayLike> {
             const index = this.coreIndexOnAxis(pos[axis], axis);
             return start + strideWide * index;
         }, self.coreOffset);
+    }
+
+    get(...pos: number[]): any {
+        const idx = this.index(...pos);
+        return this.data[idx];
     }
 
     transpose(perm?: number[]): NDView<TARRAY> {
@@ -135,5 +148,121 @@ export class NDView<TARRAY extends NDArrayLike> {
         }
         return new NDView(this.data, nShape, nStride, nOffset, nGather, nRepeat);
     }
+
+    printRecursively(
+        prefixes: string[],
+        r: number, // depth of the array axises
+        currentLine: string[], // elements in current line
+        loc: number[], 
+        shape: number[], 
+        excludes: [number, number][],
+        stringifyElem: (any) => string, 
+        printLine: (line: string) => void
+    ) {
+        let exRight = (excludes[r][1] >= 0) ? (excludes[r][1]) : (shape[r] + excludes[r][1]);
+        currentLine.push('[ ');
+        if (r != shape.length-1) {
+            for (loc[r] = 0; loc[r] < shape[r]; ) {
+                if (excludes && loc[r] == excludes[r][0] && loc[r] < exRight) {
+                    for (let k = r+1; k < shape.length; ++k) currentLine.push('[ ');
+                    currentLine.push(' ...... ');
+                    for (let k = r+1; k < shape.length; ++k) currentLine.push(' ]...');
+                    currentLine.push(',');
+                    printLine(currentLine.join(''));
+                    currentLine.length = 0;
+                    currentLine.push(prefixes[r+1]);
+                    loc[r] = exRight - 1; 
+                }
+                else {
+                    this.printRecursively(prefixes, r+1, currentLine, loc, shape, excludes, stringifyElem, printLine);
+                }
+                ++loc[r];
+            }
+    
+        }
+        else {
+            for (loc[r] = 0; loc[r] < shape[r]; ) {
+                if (excludes && loc[r] == excludes[r][0] && loc[r] < exRight) {
+                    currentLine.push(' ......, ');
+                    loc[r] = exRight - 1; 
+                }
+                else {
+                    const v = this.get(...loc);
+                    currentLine.push(stringifyElem(v));
+                    if  (loc[r] != shape[r] - 1) {
+                        currentLine.push(', ');
+                    }
+                }
+                ++loc[r];
+            }
+        }
+    
+        if (r > 0 && loc[r-1] < shape[r-1] - 1) {
+            currentLine.push(' ],');
+            printLine(currentLine.join(''));
+            currentLine.length = 0;
+            currentLine.push(prefixes[r]);
+        }
+        else {
+            currentLine.push(' ]');
+            if (r == 0) {
+                printLine(currentLine.join(''));
+                currentLine.length = 0;
+            }
+        }
+    }
+    
+
+    getExcludes(rank: number, excludeLastAxis: [number, number], excludeHiAxises: [number, number]): [number, number][] {
+        excludeLastAxis = (excludeLastAxis)? excludeLastAxis : [Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER];
+        excludeHiAxises = (excludeHiAxises)? excludeHiAxises : excludeLastAxis;
+    
+        const excludes : [number, number][] = [];
+        for (let i = 0; i < rank - 1; ++i) {
+            excludes.push(excludeHiAxises);
+        }
+        excludes.push(excludeLastAxis);
+        return excludes;
+    }
+    
+    
+    print(
+        name: string = '',
+        stringifyElem: (any) => string = null, 
+        excludeLastAxis: [number, number] = null,
+        excludeHiAxises: [number, number] = null,
+        leftMargin: number = 2,
+        printline: (line: string) => void = function (line) { console.log(line); }
+    ) {
+        const shape = this.shape;
+        const rank = shape.length;
+        stringifyElem = (stringifyElem) ? stringifyElem : (x) => JSON.stringify(x);
+        const excludes = this.getExcludes(rank, excludeLastAxis, excludeHiAxises);
+        const loc = new Array(rank).fill(0);
+        const spacePrefix = new Array(rank+1).fill('');
+        if (rank >= 1) spacePrefix[0] = (new Array(leftMargin+1)).fill(' ').join('').toString();
+        for (let i = 1; i < rank; ++i) {
+            spacePrefix[i] = `${spacePrefix[i-1]}  `; // two spaces
+        }
+        
+        console.log(`${name} of shape:${shape} = `);
+        const currentline = [spacePrefix[0]];
+        if (rank <= 0) {
+            const s = stringifyElem(this.data[0]);
+            currentline.push(s);
+            printline(currentline.join(''));
+            currentline.length = 0;
+        }
+        else {
+            this.printRecursively(spacePrefix, 0, currentline, loc, shape, excludes, stringifyElem, printline);
+        }
+    }
+
+    toString( ) {
+        const lines: string[] = [];
+        this.print('', null, [5,3], null, 0, (line) => lines.push(line));
+        return lines.join('\n');
+    }
+    
 };
 

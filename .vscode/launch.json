@@ -38,7 +38,7 @@
             "type": "node",
             "request": "launch",
             "name": "Launch Program",
-            "program": "${workspaceFolder}/index.js",
+            "program": "${workspaceFolder}/dist/samples/scratch/scratch",
             "outFiles": [
                 "${workspaceFolder}/dist/**/*.js"
             ]
