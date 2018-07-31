@@ -17,10 +17,10 @@ asqueeze.print('a.squeeze()');
 
 const paddings = [[1, 1], [1, 1]];
 let apad = asqueeze.pad(paddings as [number, number][]);
-apad.print('asqueeze.pad('+JSON.stringify(paddings) + ')');
+apad.print(`asqueeze.pad(${JSON.stringify(paddings)})`);
 
 let areshape = a.reshape([-1, 2]);
-areshape.print('a.reshape([-1,2]');
+areshape.print('a.reshape([-1,2])');
 
 let aflat = areshape.reshape([-1]);
 aflat.print('areshape.reshape([-1])');

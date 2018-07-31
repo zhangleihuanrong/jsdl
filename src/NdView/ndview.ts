@@ -2,7 +2,7 @@ import { assert as ASSERT } from '../utils/gadget';
 
 // N Dimention View structure on plain array.
 // No data is stored or used here.
-export type NDArrayLike = number[] | boolean[] | string[] | Float32Array | Int32Array | Uint8Array | Uint8ClampedArray | Float64Array;
+export type NdArrayLike = number[] | boolean[] | string[] | Float32Array | Int32Array | Uint8Array | Uint8ClampedArray | Float64Array;
 
 // Need support:
 // transpose in place,
@@ -32,8 +32,8 @@ export type NDArrayLike = number[] | boolean[] | string[] | Float32Array | Int32
 // gather do not co-exists with padding. other operations should rebuild the data to get a clean
 // core view first.
 //
-export class NDView<TARRAY extends NDArrayLike> {
-    data: TARRAY = null;
+export class NDView {
+    data: NdArrayLike = null;
     readonly coreShape: number[];
     readonly coreStride: number[];
     readonly coreOffset: number;
@@ -52,7 +52,7 @@ export class NDView<TARRAY extends NDArrayLike> {
 
     // data could be null
     constructor(
-        data: TARRAY, 
+        data: NdArrayLike, 
         shape: number[],
         stride: number[] = null, 
         offset: number = 0,
@@ -182,7 +182,7 @@ export class NDView<TARRAY extends NDArrayLike> {
         this.data[idx] = value;
     }
 
-    transpose(perm?: number[]): NDView<TARRAY> {
+    transpose(perm?: number[]): NDView {
         const self = this;
         const rank = this.coreShape.length;
         perm = perm || ((new Array(rank)).map((v, i) => rank - 1 - i));
@@ -202,7 +202,7 @@ export class NDView<TARRAY extends NDArrayLike> {
     }
 
 
-    pick(indices: number[]): NDView<TARRAY> {
+    pick(indices: number[]): NDView {
         const self = this;
         ASSERT(indices.length == this.coreShape.length, "pick should give indices of same length as shape!");
         ASSERT(indices.every((v, i) => v < self.shape[i]), "pick should use value less than axis' size or negitive for keep");
@@ -232,7 +232,7 @@ export class NDView<TARRAY extends NDArrayLike> {
     }
 
 
-    squeeze(axises? : number[]) : NDView<TARRAY> {
+    squeeze(axises? : number[]) : NDView {
         const self = this;
         const rank = self.coreShape.length;
         if (typeof axises === 'undefined' || axises == null || axises.length == 0) {
@@ -276,7 +276,7 @@ export class NDView<TARRAY extends NDArrayLike> {
     }
 
 
-    unsqueeze(axises : number[]) : NDView<TARRAY> {
+    unsqueeze(axises : number[]) : NDView {
         const rank = this.coreShape.length;
 
         axises = (axises == null) ? [0] : (axises.length == 0) ? [0] : axises;
@@ -304,7 +304,7 @@ export class NDView<TARRAY extends NDArrayLike> {
     }
 
 
-    rebuildData(): TARRAY {
+    rebuildData(): NdArrayLike {
         if (this.data == null) return null;
         
         // Check originality
@@ -318,7 +318,7 @@ export class NDView<TARRAY extends NDArrayLike> {
             }
         }
 
-        let d: NDArrayLike = null;
+        let d: NdArrayLike = null;
         if (Array.isArray(this.data)) {
             d = new Array[this.size];
             this.forEach((v, idx) => d[idx] = v);
@@ -336,12 +336,12 @@ export class NDView<TARRAY extends NDArrayLike> {
             this.forEach((v, idx) => d[idx] = v);
         }
         //TODO, more here
-        return d as TARRAY;
+        return d;
     }
 
 
-    rebuild(forceCopy: boolean = false) : NDView<TARRAY> {
-        let pureCore: NDView<TARRAY> = this;
+    rebuild(forceCopy: boolean = false) : NDView {
+        let pureCore: NDView = this;
         if (this.padding || this.gather || this.repeat || forceCopy) {
             const arr = this.rebuildData();
             pureCore = new NDView(arr, this.shape, null, 0, null, null, null, 0);
@@ -349,13 +349,13 @@ export class NDView<TARRAY extends NDArrayLike> {
         return pureCore;
     }
 
-    expandDim(axis?: number) : NDView<TARRAY> {
+    expandDim(axis?: number) : NDView {
         axis = axis || 0;
         return this.unsqueeze([axis]);
     }
 
 
-    reshape(shape: number[]): NDView<TARRAY> {
+    reshape(shape: number[]): NDView {
         ASSERT(shape.every(v => v > 0 || v == -1), "reshape axis len must be positive or -1");
         const numberOfNeg1 = shape.reduce((n, v) => n + ((v==-1)?1:0), 0);
         ASSERT(numberOfNeg1 <= 1, "At most one -1 could be used in reshape!");
@@ -373,7 +373,7 @@ export class NDView<TARRAY extends NDArrayLike> {
     }
 
 
-    pad(paddings: [number, number][], value: number|string = 0) : NDView<TARRAY> {
+    pad(paddings: [number, number][], value: number|string = 0) : NDView {
         ASSERT(paddings != null && paddings.length == this.shape.length, "Shape length not matching with padding dimentions");
         ASSERT(paddings.every(v => v != null && v[0] >= 0 && v[1] >= 0), "Padding on axis should all not negative.");
         if (this.gather || this.repeat) {
@@ -413,7 +413,7 @@ export class NDView<TARRAY extends NDArrayLike> {
         return new NDView(this.data, this.coreShape, this.coreStride, this.coreOffset, ngather, nrepeat, null, 0);
     }
 
-    tile(reps: number[]) : NDView<TARRAY> {
+    tile(reps: number[]) : NDView {
         ASSERT(reps != null && reps.length == this.shape.length, "title parameter length not matching shape");
         ASSERT(reps.every(v => v > 0 && v == (v|0)), "repeat must all be positive integers!");
 
@@ -425,7 +425,7 @@ export class NDView<TARRAY extends NDArrayLike> {
     }
 
 
-    step(steps: number[]) : NDView<TARRAY> {
+    step(steps: number[]) : NDView {
         ASSERT(steps && steps.length != this.shape.length && steps.every(v => (v|0) != 0),
                "steps must all be non-zero numbers!");
         steps = steps.map(v => v | 0); // to integer
@@ -446,14 +446,14 @@ export class NDView<TARRAY extends NDArrayLike> {
     }
 
 
-    reverse(axis: number = 0) : NDView<TARRAY> {
+    reverse(axis: number = 0) : NDView {
         ASSERT(axis >= 0 && axis < this.shape.length, "axis out of boundary");
         const steps = this.shape.map((v, idx) => (idx == axis) ? -1 : 1);
         return this.step(steps);
     }
 
     // start should in [0, axis-len), size should be valid positive or -1.
-    slice(start: number | number[], sizes?: number|number[]): NDView<TARRAY> {
+    slice(start: number | number[], sizes?: number|number[]): NDView {
         if (!sizes) sizes = this.shape.map(v => -1);
         if (!Array.isArray(start)) start = this.shape.map((v, idx) => (idx == 0) ? start as number : 0);
         if (!Array.isArray(sizes)) sizes = this.shape.map((v, idx) => (idx == 0) ? sizes as number : -1);
@@ -482,11 +482,11 @@ export class NDView<TARRAY extends NDArrayLike> {
     }
 
 
-    lo(...loc: number[]): NDView<TARRAY> {
+    lo(...loc: number[]): NDView {
         return this.slice(loc);
     }
 
-    hi(...sizes: number[]): NDView<TARRAY> {
+    hi(...sizes: number[]): NDView {
         return this.slice(0, sizes);
     }
 
@@ -617,7 +617,7 @@ export class NDView<TARRAY extends NDArrayLike> {
 
     
     recursiveEach(loc: number[], r: number, seqIdArr: [number],
-                 cb: (v: any, index: number, loc: number[], arr: TARRAY) => void) {
+                 cb: (v: any, index: number, loc: number[], arr: NdArrayLike) => void) {
         let limit = this.shape[r];
         if (r < this.shape.length-1) {
             for (loc[r] = 0; loc[r] < limit; ++loc[r]) {
