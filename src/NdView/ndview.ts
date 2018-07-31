@@ -54,8 +54,8 @@ export class NDView<TARRAY extends NDArrayLike> {
         gather: number[][] = null,
         repeat: number[] = null,
         padding: [number, number][] = null) {
-        const self = this;
 
+        const self = this;
         ASSERT(shape != null && shape.every(v => v > 0), 'Dimensions must all positive!');
         this.coreShape = shape;
         const rank = shape.length;
@@ -64,26 +64,39 @@ export class NDView<TARRAY extends NDArrayLike> {
         this.coreStride = stride || NDView.buildStride(shape);
         ASSERT(this.coreStride.length == rank, 'strides must of same length as shape!');
 
-        let extShape = this.coreShape;
+
+        this.repeat = repeat || null;
+        ASSERT(this.repeat == null || this.repeat.every(v => v > 0), 
+                "repeat must all be positive!");
 
         this.gather = gather || null;
         if (this.gather != null) {
             ASSERT(this.gather.length == rank, "gather array should of same length as shape!");
-            ASSERT(this.gather.every(a => a == null || Array.isArray(a)), "gather should be number[][]");
-            ASSERT(this.gather.every(a => a == null || a.every((v, i) => v >= 0 && v < self.shape[i])),
+            ASSERT(this.gather.every(a => a != null && Array.isArray(a)), "gather value for axis should all be number[]");
+            ASSERT(this.gather.every(a => a.every((v, i) => v >= 0 && v < self.shape[i])),
                 `gather array value out of bound`);
             const needGather = this.gather.some(a => a != null && a.length > 0);
             if (!needGather) {
                 this.gather = null;
-            } else {
-                extShape = this.gather.map((a, i) => (a == null || a.length == 0) ? self.coreShape[i] : a.length);
             }
         }
 
-        this.repeat = repeat || null;
-        ASSERT(this.repeat == null || this.repeat.every(v => v > 0), "repeat must all be positive!");
+        this.padding = padding || null;
+        ASSERT(!(this.padding != null && (this.gather != null || this.repeat != null)), 
+                "Padding can not co-working with gather/repeat");
+        ASSERT(this.padding == null || this.padding.every(v => v != null && v[0] >= 0 && v[1] >= 0), 
+                "Padding on axis should all not negative.");
 
-        this.shape = gsa.map((w, i) => (self.repeat) ? w * self.repeat[i] : w);
+        if (this.padding != null) {
+            this.shape = this.coreShape.map((w, i) => (w + self.padding[i][0] + self.padding[i][1]));
+        }
+        else {
+            let grShape = this.coreShape;
+            if (this.gather) {
+                grShape = this.gather.map((a, i) => (a.length == 0) ? self.coreShape[i] : a.length);
+            }
+            this.shape = grShape.map((w, i) => (self.repeat) ? w * self.repeat[i] : w);
+        }
         this.size = this.shape.reduce((m, v) => m * v, 1);
         
         this.coreOffset = offset;
@@ -100,11 +113,19 @@ export class NDView<TARRAY extends NDArrayLike> {
 
     // no error check for performance
     private coreIndexOnAxis(outerIndex: number, axis: number) : number {
-        const gatherOnAxis = (this.gather[axis] != null && this.gather[axis].length > 0);
-        const gatherWide =  gatherOnAxis ? this.gather[axis].length : this.coreShape[axis];
-        let index = outerIndex % gatherWide;
-        if (gatherOnAxis) index = this.gather[axis][index];
-        return index;
+        if (this.padding) {
+            if (outerIndex < this.padding[axis][0] || 
+                outerIndex >= (this.padding[axis][0] + this.coreShape[axis]))
+                return -1;
+            return outerIndex - this.padding[axis][0];
+        }
+        else {
+            const gatherOnAxis = (this.gather[axis] != null && this.gather[axis].length > 0);
+            const gatherWide =  gatherOnAxis ? this.gather[axis].length : this.coreShape[axis];
+            let index = outerIndex % gatherWide;
+            if (gatherOnAxis) index = this.gather[axis][index];
+            return index;
+        }
      }
 
     // return the index in the core flat array for given subscription array
@@ -135,10 +156,10 @@ export class NDView<TARRAY extends NDArrayLike> {
 
         const nshape = self.coreShape.map((v, i, a) => a[perm[i]]);
         const nstride = self.coreStride.map((v, i, a) => a[perm[i]]);
-        const nGather = this.gather.map((v, i, a) => a[perm[i]]);
-        const nRepeat = self.repeat.map((v, i, a) => a[perm[i]]);
-        const nv = new NDView(this.data, nshape, nstride, this.coreOffset, nGather, nRepeat);
-        return nv;
+        const nGather = (self.gather) ? self.gather.map((v, i, a) => a[perm[i]]) : null;
+        const nRepeat = (self.repeat) ? self.repeat.map((v, i, a) => a[perm[i]]) : null;
+        const nPadding = (self.padding) ? self.padding.map((v, i, a) => a[perm[i]]) : null;
+        return new NDView(this.data, nshape, nstride, this.coreOffset, nGather, nRepeat, nPadding);
     }
 
 
@@ -150,8 +171,9 @@ export class NDView<TARRAY extends NDArrayLike> {
 
         const nShape: number[] = [];
         const nStride: number[] = [];
-        const nGather: number[][] = [];
-        const nRepeat: number[] = [];
+        const nGather: number[][] = (self.gather) ? [] : null;
+        const nRepeat: number[] = (self.repeat) ? [] : null;
+        const nPadding: [number, number][] = (self.padding) ? []: null;
 
         let nOffset = self.coreOffset;
         for (let axis = 0; axis < rank; ++axis) {
@@ -162,11 +184,12 @@ export class NDView<TARRAY extends NDArrayLike> {
             else {
                 nShape.push(this.coreShape[axis]);
                 nStride.push(this.coreStride[axis]);
-                nGather.push(this.gather[axis]);
-                nRepeat.push(this.repeat[axis]);
+                if (nGather != null) nGather.push(this.gather[axis]);
+                if (nRepeat != null) nRepeat.push(this.repeat[axis]);
+                if (nPadding != null) nPadding.push(this.padding[axis]);
             }
         }
-        return new NDView(this.data, nShape, nStride, nOffset, nGather, nRepeat);
+        return new NDView(this.data, nShape, nStride, nOffset, nGather, nRepeat, nPadding);
     }
 
 
@@ -195,8 +218,9 @@ export class NDView<TARRAY extends NDArrayLike> {
 
         let eshape = this.coreShape.slice(0);
         const estride = this.coreStride.slice(0);  
-        const egather = this.gather.slice(0);
-        const erepeat = this.repeat.slice(0);
+        const egather = (this.gather != null) ? this.gather.slice(0) : null;
+        const erepeat = (this.repeat) ? this.repeat.slice(0) : null;
+        const epadding = (this.padding) ? this.padding.slice(0) : null;
 
         let removedCount = 0;
         for (let i = 0; i < axises.length; ++i) {
@@ -204,11 +228,12 @@ export class NDView<TARRAY extends NDArrayLike> {
             ++removedCount;
             eshape.splice(nposition, 1);
             estride.splice(nposition, 1);
-            egather.splice(nposition, 1);
-            erepeat.splice(nposition, 1);
+            if (egather) egather.splice(nposition, 1);
+            if (erepeat) erepeat.splice(nposition, 1);
+            if (epadding) epadding.splice(nposition, 1);
         }
 
-        return new NDView(this.data, eshape, estride, this.coreOffset, egather, erepeat);
+        return new NDView(this.data, eshape, estride, this.coreOffset, egather, erepeat, epadding);
     }
 
 
@@ -221,20 +246,22 @@ export class NDView<TARRAY extends NDArrayLike> {
 
         let eshape = this.coreShape.slice(0);
         const estride = this.coreStride.slice(0);  
-        const egather = this.gather.slice(0);
-        const erepeat = this.repeat.slice(0);
+        const egather = (this.gather) ? this.gather.slice(0) : null;
+        const erepeat = (this.repeat) ? this.repeat.slice(0) : null;
+        const epadding = (this.padding) ? this.padding.slice(0) : null;
 
         let expand = axises.length - 1;
         for (let i = rank; i >= 0; --i) {
             for(; axises[expand] == i; --expand) {
                 eshape.splice(i, 0, 1);
                 estride.splice(i, 0, 0); // Add stride 0 element axises
-                egather.splice(i, 0, null);
-                erepeat.splice(i, 0, 1);
+                if (egather) egather.splice(i, 0, null);
+                if (erepeat) erepeat.splice(i, 0, 1);
+                if (epadding) epadding.splice(i, 0, [0, 0]);
             }
         }
 
-        return new NDView(this.data, eshape, estride, this.coreOffset, egather, erepeat);
+        return new NDView(this.data, eshape, estride, this.coreOffset, egather, erepeat, epadding);
     }
 
 
