@@ -36,6 +36,7 @@ export class NDView<TARRAY extends NDArrayLike> {
 
     readonly gather: number[][];
     readonly repeat: number[];
+    readonly padding: [number, number][];
 
     readonly needRepeat: boolean;
     readonly needGather: boolean;
@@ -45,9 +46,14 @@ export class NDView<TARRAY extends NDArrayLike> {
     readonly shape: number[]; // shape after repeat
 
     // data could be null
-    constructor(data: TARRAY, shape: number[],
-        stride: number[] = null, offset: number = 0,
-        gather: number[][] = null, repeat: number[] = null) {
+    constructor(
+        data: TARRAY, 
+        shape: number[],
+        stride: number[] = null, 
+        offset: number = 0,
+        gather: number[][] = null,
+        repeat: number[] = null,
+        padding: [number, number][] = null) {
         const self = this;
 
         ASSERT(shape != null && shape.every(v => v > 0), 'Dimensions must all positive!');
@@ -58,19 +64,26 @@ export class NDView<TARRAY extends NDArrayLike> {
         this.coreStride = stride || NDView.buildStride(shape);
         ASSERT(this.coreStride.length == rank, 'strides must of same length as shape!');
 
-        this.gather = gather || new Array(rank).fill(null);
-        ASSERT(this.gather.length == rank, "gather array should of same length as shape!");
-        ASSERT(this.gather.every(a => a == null || Array.isArray(a)), "gather should be number[][]");
-        ASSERT(this.gather.every(a => a == null || a.every((v, i) => v >= 0 && v < self.shape[i])),
-            `gather array value out of bound`);
-        this.needGather = this.gather.some(a => a != null && a.length > 0);
-        const gsa = this.gather.map((a, i) => (a == null || a.length == 0) ? self.coreShape[i] : a.length);
+        let extShape = this.coreShape;
 
-        this.repeat = repeat || new Array(rank).fill(1);
-        ASSERT(this.repeat.every(v => v > 0), "repeat must all be positive!");
-        this.needRepeat = this.repeat.some(v => v != 1);
+        this.gather = gather || null;
+        if (this.gather != null) {
+            ASSERT(this.gather.length == rank, "gather array should of same length as shape!");
+            ASSERT(this.gather.every(a => a == null || Array.isArray(a)), "gather should be number[][]");
+            ASSERT(this.gather.every(a => a == null || a.every((v, i) => v >= 0 && v < self.shape[i])),
+                `gather array value out of bound`);
+            const needGather = this.gather.some(a => a != null && a.length > 0);
+            if (!needGather) {
+                this.gather = null;
+            } else {
+                extShape = this.gather.map((a, i) => (a == null || a.length == 0) ? self.coreShape[i] : a.length);
+            }
+        }
 
-        this.shape = gsa.map((w, i) => w * self.repeat[i]);
+        this.repeat = repeat || null;
+        ASSERT(this.repeat == null || this.repeat.every(v => v > 0), "repeat must all be positive!");
+
+        this.shape = gsa.map((w, i) => (self.repeat) ? w * self.repeat[i] : w);
         this.size = this.shape.reduce((m, v) => m * v, 1);
         
         this.coreOffset = offset;
