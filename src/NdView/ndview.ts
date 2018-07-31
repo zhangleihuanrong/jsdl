@@ -37,6 +37,7 @@ export class NDView<TARRAY extends NDArrayLike> {
     readonly gather: number[][];
     readonly repeat: number[];
     readonly padding: [number, number][];
+    readonly paddingValue: string | number;
 
     readonly needRepeat: boolean;
     readonly needGather: boolean;
@@ -53,8 +54,10 @@ export class NDView<TARRAY extends NDArrayLike> {
         offset: number = 0,
         gather: number[][] = null,
         repeat: number[] = null,
-        padding: [number, number][] = null) {
+        padding: [number, number][] = null,
+        paddingValue : string | number = 0) {
 
+        //TODO: slice(0) for all the non-null parameters except data
         const self = this;
         ASSERT(shape != null && shape.every(v => v > 0), 'Dimensions must all positive!');
         this.coreShape = shape;
@@ -68,6 +71,8 @@ export class NDView<TARRAY extends NDArrayLike> {
         this.repeat = repeat || null;
         ASSERT(this.repeat == null || this.repeat.every(v => v > 0), 
                 "repeat must all be positive!");
+        const allRepeatOnce = this.repeat && this.repeat.every(v => v == 1);
+        if (allRepeatOnce) this.repeat = null;
 
         this.gather = gather || null;
         if (this.gather != null) {
@@ -76,9 +81,7 @@ export class NDView<TARRAY extends NDArrayLike> {
             ASSERT(this.gather.every(a => a.every((v, i) => v >= 0 && v < self.shape[i])),
                 `gather array value out of bound`);
             const needGather = this.gather.some(a => a != null && a.length > 0);
-            if (!needGather) {
-                this.gather = null;
-            }
+            if (!needGather) this.gather = null;
         }
 
         this.padding = padding || null;
@@ -100,8 +103,10 @@ export class NDView<TARRAY extends NDArrayLike> {
         this.size = this.shape.reduce((m, v) => m * v, 1);
         
         this.coreOffset = offset;
+        this.paddingValue = paddingValue;
         this.data = data;
     }
+
 
     static buildStride(shape: number[]) : number[] {
         const stride: number[] = shape.map(v => 1);
@@ -111,6 +116,7 @@ export class NDView<TARRAY extends NDArrayLike> {
         return stride;
     }
 
+    
     // no error check for performance
     private coreIndexOnAxis(outerIndex: number, axis: number) : number {
         if (this.padding) {
@@ -120,27 +126,34 @@ export class NDView<TARRAY extends NDArrayLike> {
             return outerIndex - this.padding[axis][0];
         }
         else {
-            const gatherOnAxis = (this.gather[axis] != null && this.gather[axis].length > 0);
+            const gatherOnAxis = (this.gather && this.gather[axis] && this.gather[axis].length > 0);
             const gatherWide =  gatherOnAxis ? this.gather[axis].length : this.coreShape[axis];
             let index = outerIndex % gatherWide;
             if (gatherOnAxis) index = this.gather[axis][index];
             return index;
         }
-     }
+    }
 
-    // return the index in the core flat array for given subscription array
+    
+     // return the index in the core flat array for given subscription array
     // no error check here
     index(...pos: number[]): number {
         const self = this;
         return this.coreStride.reduce((start, strideWide, axis) => {
             const index = this.coreIndexOnAxis(pos[axis], axis);
-            return start + strideWide * index;
+            return (start < 0 || index < 0)? -1 : start + strideWide * index;
         }, self.coreOffset);
     }
 
     get(...pos: number[]): any {
         const idx = this.index(...pos);
-        return this.data[idx];
+        return (idx >= 0) ? this.data[idx] : this.paddingValue;
+    }
+
+    set(pos: number[], value : any) {
+        const idx = this.index(...pos);
+        ASSERT(idx >= 0, "padding area are not allowed to set value");
+        this.data[idx] = value;
     }
 
     transpose(perm?: number[]): NDView<TARRAY> {
@@ -159,7 +172,7 @@ export class NDView<TARRAY extends NDArrayLike> {
         const nGather = (self.gather) ? self.gather.map((v, i, a) => a[perm[i]]) : null;
         const nRepeat = (self.repeat) ? self.repeat.map((v, i, a) => a[perm[i]]) : null;
         const nPadding = (self.padding) ? self.padding.map((v, i, a) => a[perm[i]]) : null;
-        return new NDView(this.data, nshape, nstride, this.coreOffset, nGather, nRepeat, nPadding);
+        return new NDView(this.data, nshape, nstride, this.coreOffset, nGather, nRepeat, nPadding, this.paddingValue);
     }
 
 
@@ -189,7 +202,7 @@ export class NDView<TARRAY extends NDArrayLike> {
                 if (nPadding != null) nPadding.push(this.padding[axis]);
             }
         }
-        return new NDView(this.data, nShape, nStride, nOffset, nGather, nRepeat, nPadding);
+        return new NDView(this.data, nShape, nStride, nOffset, nGather, nRepeat, nPadding, this.paddingValue);
     }
 
 
@@ -233,7 +246,7 @@ export class NDView<TARRAY extends NDArrayLike> {
             if (epadding) epadding.splice(nposition, 1);
         }
 
-        return new NDView(this.data, eshape, estride, this.coreOffset, egather, erepeat, epadding);
+        return new NDView(this.data, eshape, estride, this.coreOffset, egather, erepeat, epadding, this.paddingValue);
     }
 
 
@@ -261,15 +274,103 @@ export class NDView<TARRAY extends NDArrayLike> {
             }
         }
 
-        return new NDView(this.data, eshape, estride, this.coreOffset, egather, erepeat, epadding);
+        return new NDView(this.data, eshape, estride, this.coreOffset, egather, erepeat, epadding, this.paddingValue);
     }
 
+
+    rebuildData(): TARRAY {
+        if (this.data == null) return null;
+        
+        // Check originality
+        if (this.padding == null && this.gather == null && this.repeat == null && this.size == this.coreSize) {
+            if (this.coreOffset == 0 && this.size == this.data.length) {
+                let isStrideDesc = true;
+                for (let i = 0; i < this.coreShape.length - 1; ++i) {
+                    if (this.coreStride[i] < this.coreStride[i+1]) isStrideDesc = false;
+                }
+                if (isStrideDesc) return this.data;
+            }
+        }
+
+        let d: NDArrayLike = null;
+        if (Array.isArray(this.data)) {
+            d = new Array[this.size];
+            this.forEach((v, idx) => d[idx] = v);
+        }
+        else if (this.data instanceof Float32Array){
+            d = new Float32Array(this.size);
+            this.forEach((v, idx) => d[idx] = v);
+        }
+        else if (this.data instanceof Int32Array) {
+            d = new Int32Array(this.size);
+            this.forEach((v, idx) => d[idx] = v);
+        }
+        else if (this.data instanceof Uint8Array) {
+            d = new Uint8Array(this.size);
+            this.forEach((v, idx) => d[idx] = v);
+        }
+        //TODO, more here
+        return d as TARRAY;
+    }
 
     expandDim(axis?: number) : NDView<TARRAY> {
         axis = axis || 0;
         return this.unsqueeze([axis]);
     }
 
+
+    reshape(shape: number[]): NDView<TARRAY> {
+        ASSERT(shape.every(v => v > 0 || v == -1), "reshape axis len must be positive or -1");
+        const numberOfNeg1 = shape.reduce((n, v) => n + ((v==-1)?1:0), 0);
+        ASSERT(numberOfNeg1 <= 1, "At most one -1 could be used in reshape!");
+        let ns = Math.abs(shape.reduce((m, v) => m*v, 1));
+        if (numberOfNeg1 == 1) {
+            ASSERT(this.size % ns == 0, "-1 can not find matching size during reshape");
+            const w = Math.ceil(this.size / ns);
+            shape = shape.map(v => (v == -1)? w : v);
+            ns = ns * w;
+        }
+        ASSERT(ns == this.size, "Size not matching with original!");
+
+        const arr = this.rebuildData();
+        return new NDView(arr, shape, null, 0, null, null, null, 0);
+    }
+
+
+    pad(paddings: [number, number][], value: number|string = 0) : NDView<TARRAY> {
+        ASSERT(paddings != null && paddings.length == this.shape.length, "Shape length not matching with padding dimentions");
+        ASSERT(paddings.every(v => v != null && v[0] >= 0 && v[1] >= 0), "Padding on axis should all not negative.");
+        if (this.gather || this.repeat) {
+            const arr = this.rebuildData();
+            return new NDView(arr, this.shape, null, 0, null, null, paddings, value);
+        }
+        
+        if (this.padding) {
+            paddings = paddings.map((v, i) => [v[0] + this.padding[i][0], v[1] + this.padding[i][1]]) as [number, number][];
+        }
+        return new NDView(this.data, this.coreShape, this.coreStride, this.coreOffset, null, null, paddings, value);
+    }
+
+
+    tile(reps: number[]) : NDView<TARRAY> {
+        ASSERT(reps != null && reps.length == this.shape.length, "title parameter length not matching shape");
+        ASSERT(reps.every(v => v > 0), "repeat must all be positive!");
+
+        if (this.padding) {
+            const d = this.rebuildData();
+            return new NDView(d, this.shape, null, 0, null, reps, null, 0);
+        }
+        if (this.repeat) {
+            reps = reps.map((v, idx) => (v * this.repeat[idx]));
+        }
+        return new NDView(this.data, this.coreShape, this.coreStride, this.coreOffset,
+                          this.gather, reps, null, 0);
+    }
+
+
+    slice(start: number[], size: number[]): NDView<TARRAY> {
+        return null;
+    }
 
     printRecursively(
         prefixes: string[],
@@ -394,6 +495,34 @@ export class NDView<TARRAY extends NDArrayLike> {
         const lines: string[] = [];
         this.print('', null, [5,3], null, (line) => lines.push(line));
         return lines.join('\n');
+    }
+
+    
+    recursiveEach(loc: number[], r: number, seqIdArr: [number],
+                 cb: (v: any, index: number, loc: number[], arr: TARRAY) => void) {
+        let limit = this.shape[r];
+        if (r < this.shape.length-1) {
+            for (loc[r] = 0; loc[r] < limit; ++loc[r]) {
+                this.recursiveEach(loc, r+1, seqIdArr, cb);
+            }
+        }
+        else {
+            for (loc[r] = 0; loc[r] < limit; ++loc[r]) {
+                const idx = this.index(...loc);
+                const value = (idx >= 0) ? this.data[idx] : this.paddingValue;
+                cb(value, seqIdArr[0], loc, this.data);
+                ++seqIdArr[0];
+            }
+        }
+    }
+
+
+    forEach(cb: (v: any, seqId: number, location: number[]) => void) {
+        const shape = this.shape;
+        const rank = shape.length;
+        const loc = new Array(rank).fill(0);
+        const seqIdArr: [number] = [0];
+        this.recursiveEach(loc, 0, seqIdArr, cb);
     }
 };
 

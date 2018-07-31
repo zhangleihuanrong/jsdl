@@ -15,9 +15,18 @@ aexp.print('a.unsqueeze([2,3,3])');
 let asqueeze = a.squeeze();
 asqueeze.print('a.squeeze()');
 
-aexp = a.unsqueeze([]);
-aexp.print('a.unsqueeze([])');
+const paddings = [[1, 1], [1, 1]];
+let apad = asqueeze.pad(paddings as [number, number][]);
+apad.print('asqueeze.pad('+JSON.stringify(paddings) + ')');
 
+let areshape = a.reshape([-1, 2]);
+areshape.print('a.reshape([-1,2]');
+
+let aflat = areshape.reshape([-1]);
+aflat.print('areshape.reshape([-1])');
+
+let atile = asqueeze.tile([1,2]);
+atile.print('asqueeze.title([0,2])');
 
 // let s = new NDView(["good", "good", "study", "day", "day", "up"], [1, 2, 3]);
 // s.print('s');
