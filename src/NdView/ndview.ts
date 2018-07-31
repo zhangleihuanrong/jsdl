@@ -9,7 +9,10 @@ export type NDArrayLike = number[] | boolean[] | string[] | Float32Array | Int32
 // slice in place when no repeat nor gather,
 // gather in place*,
 // repeat in place*
+// padding in place*,
 //
+// pad in place works on core*, but not works together with other two: gather and repeat to simplify.
+// 
 // gather & repeat: 
 //     possible status: 
 //         gather(core), 
@@ -21,6 +24,9 @@ export type NDArrayLike = number[] | boolean[] | string[] | Float32Array | Int32
 //         gather1(repeat(gather2(core)) => gather'(core)
 //         repeat1(repeat2(*)) => repeat'(*)
 // So, if gather and repeat co-exists, apply gather first.
+//
+// gather & repeat do not co-working with padding.
+//
 //
 export class NDView<TARRAY extends NDArrayLike> {
     data: TARRAY = null;
@@ -44,7 +50,7 @@ export class NDView<TARRAY extends NDArrayLike> {
         gather: number[][] = null, repeat: number[] = null) {
         const self = this;
 
-        ASSERT(shape != null && shape.every(v => v > 0), 'Dimensions must not null and all positive!');
+        ASSERT(shape != null && shape.every(v => v > 0), 'Dimensions must all positive!');
         this.coreShape = shape;
         const rank = shape.length;
         this.coreSize = shape.reduce((m, v) => m * v, 1);
@@ -81,7 +87,7 @@ export class NDView<TARRAY extends NDArrayLike> {
 
     // no error check for performance
     private coreIndexOnAxis(outerIndex: number, axis: number) : number {
-        const gatherOnAxis = (this.gather[axis] != null && this.gather[axis].length >= 0);
+        const gatherOnAxis = (this.gather[axis] != null && this.gather[axis].length > 0);
         const gatherWide =  gatherOnAxis ? this.gather[axis].length : this.coreShape[axis];
         let index = outerIndex % gatherWide;
         if (gatherOnAxis) index = this.gather[axis][index];
@@ -122,6 +128,7 @@ export class NDView<TARRAY extends NDArrayLike> {
         return nv;
     }
 
+
     pick(indices: number[]): NDView<TARRAY> {
         const self = this;
         ASSERT(indices.length == this.coreShape.length, "pick should give indices of same length as shape!");
@@ -148,6 +155,81 @@ export class NDView<TARRAY extends NDArrayLike> {
         }
         return new NDView(this.data, nShape, nStride, nOffset, nGather, nRepeat);
     }
+
+
+    squeeze(axises? : number[]) : NDView<TARRAY> {
+        const self = this;
+        const rank = self.coreShape.length;
+        if (typeof axises === 'undefined' || axises == null || axises.length == 0) {
+            axises = [];
+            self.shape.forEach((v, index) => {
+                if (v == 1) axises.push(index); 
+            });
+        }
+        ASSERT(axises.every(v => v >= 0 && v <= rank), `squeeze dim parameter out of [0, ${rank}) -- ${axises}!`);
+        ASSERT(axises.every(v => self.shape[v] == 1), `squeeze only allowed on axis of size 1. -- ${axises}`);
+
+        // Sort ascedent and dedupe
+        axises.sort(function(a, b){return a - b});
+        for (let i = 0; i < axises.length - 1;) {
+            if (axises[i] == axises[i+1]) {
+                axises.splice(i, 1);
+            }
+            else {
+                ++i;
+            }
+        }
+
+        let eshape = this.coreShape.slice(0);
+        const estride = this.coreStride.slice(0);  
+        const egather = this.gather.slice(0);
+        const erepeat = this.repeat.slice(0);
+
+        let removedCount = 0;
+        for (let i = 0; i < axises.length; ++i) {
+            const nposition = axises[i] - removedCount;
+            ++removedCount;
+            eshape.splice(nposition, 1);
+            estride.splice(nposition, 1);
+            egather.splice(nposition, 1);
+            erepeat.splice(nposition, 1);
+        }
+
+        return new NDView(this.data, eshape, estride, this.coreOffset, egather, erepeat);
+    }
+
+
+    unsqueeze(axises : number[]) : NDView<TARRAY> {
+        const rank = this.coreShape.length;
+
+        axises = (axises == null) ? [0] : (axises.length == 0) ? [0] : axises;
+        axises.sort(function(a, b){return a - b});
+        ASSERT(axises.every(v => v >= 0 && v <= rank), "Expand dim parameter out of range!");
+
+        let eshape = this.coreShape.slice(0);
+        const estride = this.coreStride.slice(0);  
+        const egather = this.gather.slice(0);
+        const erepeat = this.repeat.slice(0);
+
+        let expand = axises.length - 1;
+        for (let i = rank; i >= 0; --i) {
+            for(; axises[expand] == i; --expand) {
+                eshape.splice(i, 0, 1);
+                estride.splice(i, 0, 0); // Add stride 0 element axises
+                egather.splice(i, 0, null);
+                erepeat.splice(i, 0, 1);
+            }
+        }
+
+        return new NDView(this.data, eshape, estride, this.coreOffset, egather, erepeat);
+    }
+
+
+    expandDim(axis?: number) : NDView<TARRAY> {
+        axis = axis || 0;
+        return this.unsqueeze([axis]);
+    }
+
 
     printRecursively(
         prefixes: string[],
@@ -225,28 +307,37 @@ export class NDView<TARRAY extends NDArrayLike> {
         return excludes;
     }
     
-    
+
     print(
         name: string = '',
         stringifyElem: (any) => string = null, 
         excludeLastAxis: [number, number] = null,
         excludeHiAxises: [number, number] = null,
-        leftMargin: number = 2,
-        printline: (line: string) => void = function (line) { console.log(line); }
+        printline: (line: string) => void = function (line) { console.log(line); },
+        newLineAfterName: boolean = true
     ) {
         const shape = this.shape;
         const rank = shape.length;
         stringifyElem = (stringifyElem) ? stringifyElem : (x) => JSON.stringify(x);
         const excludes = this.getExcludes(rank, excludeLastAxis, excludeHiAxises);
         const loc = new Array(rank).fill(0);
-        const spacePrefix = new Array(rank+1).fill('');
-        if (rank >= 1) spacePrefix[0] = (new Array(leftMargin+1)).fill(' ').join('').toString();
+
+        let currentline = [];
+        if (name) {
+            const dimensions: string = shape.join('x');
+            currentline.push(`${name} ...${dimensions}... = `);
+        }
+        if (newLineAfterName && currentline.length > 0) {
+            printline(currentline.join(''));
+            currentline.length = 0;
+        }
+
+        const spacePrefix = new Array(rank + 1).fill('');
+        if (currentline.length > 0) spacePrefix[0] = (new Array(currentline[0].length)).fill(' ').join('');
         for (let i = 1; i < rank; ++i) {
             spacePrefix[i] = `${spacePrefix[i-1]}  `; // two spaces
         }
-        
-        console.log(`${name} of shape:${shape} = `);
-        const currentline = [spacePrefix[0]];
+
         if (rank <= 0) {
             const s = stringifyElem(this.data[0]);
             currentline.push(s);
@@ -258,11 +349,11 @@ export class NDView<TARRAY extends NDArrayLike> {
         }
     }
 
+
     toString( ) {
         const lines: string[] = [];
-        this.print('', null, [5,3], null, 0, (line) => lines.push(line));
+        this.print('', null, [5,3], null, (line) => lines.push(line));
         return lines.join('\n');
     }
-    
 };
 
