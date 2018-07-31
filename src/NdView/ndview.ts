@@ -6,27 +6,31 @@ export type NDArrayLike = number[] | boolean[] | string[] | Float32Array | Int32
 
 // Need support:
 // transpose in place,
-// slice in place when no repeat nor gather,
+// slice in place when no (repeat, gather, padding)
 // gather in place*,
-// repeat in place*
 // padding in place*,
+// repeat in place*
 //
 // pad in place works on core*, but not works together with other two: gather and repeat to simplify.
 // 
 // gather & repeat: 
 //     possible status: 
-//         gather(core), 
-//         repeat(core), 
-//         repeat(gather(core))
-//     other operations:
+//         gather(core), padding(core),
+//         repeat(core), repeat(gather(core)), repeat(padding(core))
+// So, if gather and repeat co-exists, apply gather first. padding + repeat means repeat(padding).
+//
+//     gather/padding/repeat operations:
 //         gather1(gather2(core)) => gather'(core)
 //         gather(repeat(core)) => gather'(core)
 //         gather1(repeat(gather2(core)) => gather'(core)
+//    
+//         padding1(padding2(core)) => padding'(core)
+//         
 //         repeat1(repeat2(*)) => repeat'(*)
-// So, if gather and repeat co-exists, apply gather first.
-//
-// gather & repeat do not co-working with padding.
-//
+//         repeat(core/gather/padding) => repeat(*)
+// 
+// gather do not co-exists with padding. other operations should rebuild the data to get a clean
+// core view first.
 //
 export class NDView<TARRAY extends NDArrayLike> {
     data: TARRAY = null;
@@ -59,47 +63,64 @@ export class NDView<TARRAY extends NDArrayLike> {
 
         //TODO: slice(0) for all the non-null parameters except data
         const self = this;
-        ASSERT(shape != null && shape.every(v => v > 0), 'Dimensions must all positive!');
-        this.coreShape = shape;
-        const rank = shape.length;
-        this.coreSize = shape.reduce((m, v) => m * v, 1);
+        ASSERT(shape != null && shape.every(v => v > 0 && (v == (v|0))), 'Dimensions must all positive integers!');
+        this.coreShape = shape.slice(0);
+        const rank = this.coreShape.length;
+        this.coreSize = this.coreShape.reduce((m, v) => m * v, 1);
 
-        this.coreStride = stride || NDView.buildStride(shape);
+        this.coreStride = stride ? stride.slice(0) : NDView.buildStride(shape);
         ASSERT(this.coreStride.length == rank, 'strides must of same length as shape!');
+        ASSERT(this.coreStride.every(v => v == (v|0)), 'strides must of integers!');
 
+        // shape after gather/padding
+        let gprShape = this.coreShape.slice(0);
 
-        this.repeat = repeat || null;
-        ASSERT(this.repeat == null || this.repeat.every(v => v > 0), 
-                "repeat must all be positive!");
-        const allRepeatOnce = this.repeat && this.repeat.every(v => v == 1);
-        if (allRepeatOnce) this.repeat = null;
-
-        this.gather = gather || null;
+        this.gather = (gather) ? gather.slice(0) : null;
         if (this.gather != null) {
             ASSERT(this.gather.length == rank, "gather array should of same length as shape!");
-            ASSERT(this.gather.every(a => a != null && Array.isArray(a)), "gather value for axis should all be number[]");
-            ASSERT(this.gather.every(a => a.every((v, i) => v >= 0 && v < self.shape[i])),
-                `gather array value out of bound`);
-            const needGather = this.gather.some(a => a != null && a.length > 0);
-            if (!needGather) this.gather = null;
-        }
+            ASSERT(this.gather.every(a => a != null || Array.isArray(a)), 
+                    "gather value for axis should all be number[]");
+            ASSERT(this.gather.every(a => a.every((v, i) => v >= 0 && v == (v|0) && v < self.shape[i])),
+                    `gather array value out of bound or not integer`);
 
-        this.padding = padding || null;
-        ASSERT(!(this.padding != null && (this.gather != null || this.repeat != null)), 
-                "Padding can not co-working with gather/repeat");
-        ASSERT(this.padding == null || this.padding.every(v => v != null && v[0] >= 0 && v[1] >= 0), 
-                "Padding on axis should all not negative.");
-
-        if (this.padding != null) {
-            this.shape = this.coreShape.map((w, i) => (w + self.padding[i][0] + self.padding[i][1]));
-        }
-        else {
-            let grShape = this.coreShape;
-            if (this.gather) {
-                grShape = this.gather.map((a, i) => (a.length == 0) ? self.coreShape[i] : a.length);
+            if (this.gather.some(a => a.length > 0) ) {
+                gprShape = this.gather.map((a, i) => (a == null || a.length == 0) ? self.coreShape[i] : a.length);
             }
-            this.shape = grShape.map((w, i) => (self.repeat) ? w * self.repeat[i] : w);
+            else {
+                this.gather = null; // in fact no gather
+            }
         }
+
+        this.padding = (padding) ? padding.slice(0) : null;
+        ASSERT(!(this.padding != null && this.gather != null), "Padding can not co-existing with gather");
+        if (this.padding != null) {
+            ASSERT(this.padding.length == rank, "padding array should of same length as shape!");
+            ASSERT(this.padding.every(v => v != null && Array.isArray(v) && v.length == 2), 
+                        "Padding on axis should all be number[2]");
+            ASSERT(this.padding.every(v => v[0] >= 0 && v[1] >= 0 && v[0] == (v[0]|0) && v[1] == (v[1]|0)), 
+                        "Padding on axis should all zero or positive integers");
+            if (this.padding.some(a => a[0] != 0 || a[1] != 0)) {
+                gprShape = gprShape.map((c, idx) => c + self.padding[idx][0] + self.padding[idx][1]);
+            }
+            else {
+                this.padding = null;
+            }
+        }
+
+        this.repeat = repeat || null;
+        if (this.repeat != null) {
+            ASSERT(this.repeat.length == this.coreShape.length, "repeat must all of same dimentions as shape!");
+            ASSERT(this.repeat.every(v => v > 0 && v == (v|0)), "repeat must all be positive integers!");
+            //all repeat once means no repeat in fact
+            if (!this.repeat.every(v => v == 1)) {
+                gprShape = gprShape.map((w, i) =>  w * self.repeat[i]);
+            }
+            else {
+                this.repeat = null;
+            }
+        }
+
+        this.shape = gprShape;
         this.size = this.shape.reduce((m, v) => m * v, 1);
         
         this.coreOffset = offset;
@@ -119,23 +140,28 @@ export class NDView<TARRAY extends NDArrayLike> {
     
     // no error check for performance
     private coreIndexOnAxis(outerIndex: number, axis: number) : number {
+        const coreWide = this.coreShape[axis];
+        if (this.repeat) {
+            let cgpWide = coreWide;
+            if (this.padding) cgpWide += (this.padding[axis][0] + this.padding[axis][1]);
+            if (this.gather && this.gather[axis].length > 0) cgpWide = this.gather[axis].length;
+            outerIndex = outerIndex % cgpWide;
+        }
+
         if (this.padding) {
-            if (outerIndex < this.padding[axis][0] || 
-                outerIndex >= (this.padding[axis][0] + this.coreShape[axis]))
-                return -1;
-            return outerIndex - this.padding[axis][0];
+            if (outerIndex >= this.padding[axis][0] && outerIndex < (this.padding[axis][0] + coreWide)) {
+                return outerIndex - this.padding[axis][0];
+            }
+            return -1;
         }
-        else {
-            const gatherOnAxis = (this.gather && this.gather[axis] && this.gather[axis].length > 0);
-            const gatherWide =  gatherOnAxis ? this.gather[axis].length : this.coreShape[axis];
-            let index = outerIndex % gatherWide;
-            if (gatherOnAxis) index = this.gather[axis][index];
-            return index;
-        }
+        if (this.gather && this.gather[axis].length > 0) {
+            return this.gather[axis][outerIndex];
+        } 
+        return outerIndex;
     }
 
     
-     // return the index in the core flat array for given subscription array
+    // return the index in the core flat array for given subscription array
     // no error check here
     index(...pos: number[]): number {
         const self = this;
@@ -313,6 +339,16 @@ export class NDView<TARRAY extends NDArrayLike> {
         return d as TARRAY;
     }
 
+
+    rebuild(forceCopy: boolean = false) : NDView<TARRAY> {
+        let pureCore: NDView<TARRAY> = this;
+        if (this.padding || this.gather || this.repeat || forceCopy) {
+            const arr = this.rebuildData();
+            pureCore = new NDView(arr, this.shape, null, 0, null, null, null, 0);
+        }
+        return pureCore;
+    }
+
     expandDim(axis?: number) : NDView<TARRAY> {
         axis = axis || 0;
         return this.unsqueeze([axis]);
@@ -352,24 +388,106 @@ export class NDView<TARRAY extends NDArrayLike> {
     }
 
 
+    gatherOn(indices: number[], axis: number = 0) {
+        ASSERT(axis >= 0 && axis < this.shape.length, "axis is out of bound");
+        ASSERT((indices != null && indices.every(v => v >= 0 && v < this.shape.length && v == (v|0))), 
+              "indices bay be negetive or out of bound or not integer!");
+
+        let ngather: number[][] = this.shape.map((v, idx) => (idx == axis) ? indices : []);
+        if (this.padding) {
+            const core = this.rebuild();
+            return new NDView(core.data, core.coreShape, core.coreStride, core.coreOffset, ngather, null, null, 0);
+        }
+
+        let nrepeat = (this.repeat) ? this.repeat.slice(0) : null;
+        const innerGatherWide = (this.gather &&  this.gather[axis].length > 0) ? this.gather[axis].length : this.shape[axis];
+        if (this.repeat && this.repeat[axis] != 1) {
+            ngather[axis] = ngather[axis].map(v => v % innerGatherWide);
+            nrepeat[axis] = 1;
+        }
+        
+        if (this.gather &&  this.gather[axis].length > 0) {
+            ngather = ngather.map((s, idx) => (idx != axis) ? this.gather[idx].slice(0) : s.map(v => this.gather[idx][v]));
+        }
+
+        return new NDView(this.data, this.coreShape, this.coreStride, this.coreOffset, ngather, nrepeat, null, 0);
+    }
+
     tile(reps: number[]) : NDView<TARRAY> {
         ASSERT(reps != null && reps.length == this.shape.length, "title parameter length not matching shape");
-        ASSERT(reps.every(v => v > 0), "repeat must all be positive!");
+        ASSERT(reps.every(v => v > 0 && v == (v|0)), "repeat must all be positive integers!");
 
-        if (this.padding) {
-            const d = this.rebuildData();
-            return new NDView(d, this.shape, null, 0, null, reps, null, 0);
-        }
         if (this.repeat) {
             reps = reps.map((v, idx) => (v * this.repeat[idx]));
         }
         return new NDView(this.data, this.coreShape, this.coreStride, this.coreOffset,
-                          this.gather, reps, null, 0);
+                          this.gather, reps, this.padding, this.paddingValue);
     }
 
 
-    slice(start: number[], size: number[]): NDView<TARRAY> {
-        return null;
+    step(steps: number[]) : NDView<TARRAY> {
+        ASSERT(steps && steps.length != this.shape.length && steps.every(v => (v|0) != 0),
+               "steps must all be non-zero numbers!");
+        steps = steps.map(v => v | 0); // to integer
+        let pureCore = this.rebuild(false);
+
+        let noffset = pureCore.coreOffset;
+        const nshape = pureCore.shape.slice(0);
+        const nstride = pureCore.coreStride.slice(0);
+        for (let i = 0; i < nshape.length; ++i) {
+            const d: number = steps[i];
+            if (d < 0) {
+                noffset += nstride[i] * (nshape[i] - 1);
+            }
+            nshape[i] = Math.ceil(nshape[i] / Math.abs(d));
+            nstride[i] *= d;
+        }
+        return new NDView(pureCore.data, nshape, nstride, noffset, null, null, null, 0);
+    }
+
+
+    reverse(axis: number = 0) : NDView<TARRAY> {
+        ASSERT(axis >= 0 && axis < this.shape.length, "axis out of boundary");
+        const steps = this.shape.map((v, idx) => (idx == axis) ? -1 : 1);
+        return this.step(steps);
+    }
+
+    // start should in [0, axis-len), size should be valid positive or -1.
+    slice(start: number | number[], sizes?: number|number[]): NDView<TARRAY> {
+        if (!sizes) sizes = this.shape.map(v => -1);
+        if (!Array.isArray(start)) start = this.shape.map((v, idx) => (idx == 0) ? start as number : 0);
+        if (!Array.isArray(sizes)) sizes = this.shape.map((v, idx) => (idx == 0) ? sizes as number : -1);
+        sizes = sizes.map(v => v | 0);
+        start = start.map(v => v | 0);
+        ASSERT(start.length == this.shape.length && sizes.length == this.shape.length, "slice should use same length as shape");
+        ASSERT(start.every((v, idx) => v >= 0 && v < this.shape[idx]), "starting location out of bound");
+        ASSERT(sizes.every((s, idx) => (s == -1 || (s > 0 && s + start[idx] <= this.shape[idx]))), "sizes out of boundary");
+
+        //lo
+        const pureCore = this.rebuild(false);
+        let noffset = pureCore.coreOffset;
+        const nshape = pureCore.coreShape.slice(0);
+        const nstride = pureCore.coreStride.slice(0);
+        for (let i = 0; i < pureCore.shape.length; ++i) {
+            noffset += start[i] * nstride[i];
+            nshape[i] -= start[i];
+        }
+
+        // hi
+        for (let i = 0; i < pureCore.shape.length; ++i) {
+            if (sizes[i] > 0) nshape[i] = sizes[i];
+        }
+
+        return new NDView(pureCore.data, nshape, nstride, noffset, null, null, null, 0);
+    }
+
+
+    lo(...loc: number[]): NDView<TARRAY> {
+        return this.slice(loc);
+    }
+
+    hi(...sizes: number[]): NDView<TARRAY> {
+        return this.slice(0, sizes);
     }
 
     printRecursively(
