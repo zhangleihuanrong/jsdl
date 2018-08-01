@@ -1,6 +1,6 @@
 import {Backend} from '../backend';
 import {ENV} from '../environments';
-import {NDView as NdArray} from '../NdView/ndview';
+import {NDView as NdArray, NDView} from '../NdView/ndview';
 import {Tensor} from '../tensor';
 import {BackendTensor, DataType, Shape, TypedArray} from '../types';
 import {assert as ASSERT} from '../utils/gadget';
@@ -288,10 +288,11 @@ class WebGLBackend implements Backend {
           ((bt._dtype == 'bool') ? gl.BYTE : gl.FLOAT);
 
       gl.bindTexture(gl.TEXTURE_2D, texture);
-      gl.texImage2D(
+      if (bt._array.data) {
+        gl.texImage2D(
           gl.TEXTURE_2D, 0, gl.R32F, bt._texW, bt._texH, 0, gl.RED, tt,
           bt._array.data as TypedArray, 0);
-
+      }
       // clamp to edge
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
@@ -362,10 +363,91 @@ class WebGLBackend implements Backend {
     return Tensor.fromBackend(new WebGLTensor(nda, x.dtype));
   }
 
-  matMul(a: Tensor, b: Tensor, transposeA?: boolean, transposeB?: boolean):
-      Tensor {
-    throw new Error('Not implemented');
+  matMul(a: Tensor, b: Tensor, transposeA?: boolean, transposeB?: boolean):  Tensor {
+      const bta = backendTensorOf(a);
+      if (!bta._texture) this.create2DGLTexture(bta);
+      const btb = backendTensorOf(b);
+      if (!btb._texture) this.create2DGLTexture(btb);
+      
+      const shapeC = [a.shape[0], b.shape[1]];
+      const code = `#version 300 es
+                    precision highp float;
+
+                    in vec2 outTex;
+                    uniform sampler2D A;
+                    uniform sampler2D B;
+                    out vec4 outColor;
+
+                    void main() {
+                      ivec2 A_size = textureSize(A, 0);
+                      ivec2 B_size = textureSize(B, 0);
+                      int out_x = int(float(B_size[0]) * outTex.x);
+                      int out_y = int(float(A_size[1]) * outTex.y);
+                      int commonDim = A_size[0];
+
+                      float sum = 0.;
+                      for (int i = 0; i < commonDim; ++i) {
+                        float a = texelFetch(A, ivec2(i, out_y), 0).r;
+                        float b = texelFetch(B, ivec2(out_x, i), 0).r;
+                        sum += a * b;
+                      }
+
+                      outColor = vec4(sum);
+                    }
+                    `;
+      const program = this.compileProgram(code);
+      const btr = new WebGLTensor(new NDView(null, shapeC));
+      this.create2DGLTexture(btr);
+      
+      this.runProgram(program, btr, [{name: 'A', backendTensor: bta}, {name: 'B', backendTensor: btb}], null);
+
+      throw new Error('Not implemented');
   }
+
+  bindUniforms(program: WebGLProgram, uniforms: {value, type, name}[]) {
+    const gl = this._glContext;
+    uniforms.forEach(({ value, type, name }) => {
+        const loc = gl.getUniformLocation(program, name);
+        if (type === 'float') {
+          gl.uniform1f(loc, value);
+        } else if (type === 'int' || type === 'bool') {
+          gl.uniform1i(loc, value);
+        }
+      }
+    )
+  }
+
+  /**
+   * Bind input textures within program
+   */
+  bindInputTextures(program: WebGLProgram, inputs: {name: string, backendTensor: WebGLTensor}[]) {
+    const gl = this._glContext;
+
+    inputs.forEach(({backendTensor, name}, i) => {
+        gl.activeTexture(gl.TEXTURE0 + i);
+        gl.bindTexture(gl.TEXTURE_2D, backendTensor._texture);
+        gl.uniform1i(gl.getUniformLocation(program, name), i);
+      }
+    );
+  }
+
+  runProgram(
+        program: WebGLProgram, 
+        output: WebGLTensor, 
+        inputs: {name: string, backendTensor: WebGLTensor}[], 
+        uniforms: { value, type, name }[]) 
+  {
+    const gl = this._glContext;
+    gl.useProgram(program);
+    if (uniforms && Array.isArray(uniforms)) {
+      this.bindUniforms(program, uniforms);
+    }
+
+    this.bindOutputTexture(output._texture, [output._texW, output._texH]);
+    this.bindInputTextures(program, inputs);
+    gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0)
+  }
+
 
   reshape(x: Tensor, newShape: Shape): Tensor {
     const nda = this.getCpuMemArray(x).reshape(newShape);

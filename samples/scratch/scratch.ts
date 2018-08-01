@@ -28,6 +28,15 @@ aflat.print('areshape.reshape([-1])');
 let atile = asqueeze.tile([1,2]);
 atile.print('asqueeze.title([0,2])');
 
+
+import * as tf from '../../src/index';
+
+let ta = tf.tensor([1, 2, 3, 4, 5, 6], [2, 3]);
+let tb = tf.tensor([1, 1, 1], [3, 1]);
+let tc = tf.matMul(ta, tb, false, false);
+tc.print();
+
+
 // let s = new NDView(["good", "good", "study", "day", "day", "up"], [1, 2, 3]);
 // s.print('s');
 
