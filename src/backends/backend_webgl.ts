@@ -1,9 +1,9 @@
 import {Backend} from '../backend';
 import {ENV} from '../environments';
+import {NDView as NdArray} from '../NdView/ndview';
 import {Tensor} from '../tensor';
 import {BackendTensor, DataType, Shape, TypedArray} from '../types';
-
-import {NDView as NdArray} from '../NdView/ndview';
+import {assert as ASSERT} from '../utils/gadget';
 
 const vertexShaderSource = `
 #version 300 es
@@ -21,7 +21,7 @@ void main () {
 
 
 class WebGLTensor implements BackendTensor {
-  //basic info, TODO: combine with _array: ndarray
+  // basic info, TODO: combine with _array: ndarray
   _dtype: DataType;
 
   _array: NdArray;
@@ -39,21 +39,19 @@ class WebGLTensor implements BackendTensor {
     this._array = nda;
   }
 
-  calulateTexture2DShape(MAX_TEXTURE_SIZE: number) : boolean {
+  calulateTexture2DShape(MAX_TEXTURE_SIZE: number): boolean {
     const shape = this.shape();
     if (shape.length == 1) {
       this._texW = shape[0];
-      this._axisX = [ 0 ];
+      this._axisX = [0];
       this._texH = 1;
-      this._axisY = [ ];
-    }
-    else if (shape.length == 2) {
+      this._axisY = [];
+    } else if (shape.length == 2) {
       this._texW = shape[1];
-      this._axisX = [ 1 ];
+      this._axisX = [1];
       this._texH = shape[0];
-      this._axisY = [ 0 ];
-    }
-    else {
+      this._axisY = [0];
+    } else {
       // TODO: current is hacky
       let m = 0;
       while (m < shape.length && shape[m] == 1) --m;
@@ -61,7 +59,8 @@ class WebGLTensor implements BackendTensor {
       this._texW = 1;
       this._axisX = [];
       let i = shape.length - 1;
-      while (i > 0 && (i >= m || this._texW == 1) && this._texW * shape[i] <= MAX_TEXTURE_SIZE) {
+      while (i > 0 && (i >= m || this._texW == 1) &&
+             this._texW * shape[i] <= MAX_TEXTURE_SIZE) {
         this._texW *= shape[i];
         this._axisX.unshift(i);
         --i;
@@ -73,9 +72,9 @@ class WebGLTensor implements BackendTensor {
         this._axisY.unshift(i);
       }
     }
-    return (this._texW <= MAX_TEXTURE_SIZE && 
-            this._texH <= MAX_TEXTURE_SIZE &&
-            this._axisX.length <= 4 && this._axisY.length <= 4);
+    return (
+        this._texW <= MAX_TEXTURE_SIZE && this._texH <= MAX_TEXTURE_SIZE &&
+        this._axisX.length <= 4 && this._axisY.length <= 4);
   }
 
   shape(): number[] {
@@ -90,12 +89,12 @@ class WebGLTensor implements BackendTensor {
 };
 
 
-function ndarrayOf(t: Tensor): NdArray {
+function NdArrayOf(t: Tensor): NdArray {
   return (t.data) ? (t.data as WebGLTensor)._array : null;
 }
 
 
-function backendTensorOf(t: Tensor) : WebGLTensor {
+function backendTensorOf(t: Tensor): WebGLTensor {
   return (t.data) as WebGLTensor;
 }
 
@@ -112,13 +111,15 @@ class WebGLBackend implements Backend {
   constructor() {
     if (typeof window !== 'undefined') {
       this._canvas = document.createElement('canvas');
-      this._glContext = this._canvas.getContext('webgl2') as WebGL2RenderingContext;
+      this._glContext =
+          this._canvas.getContext('webgl2') as WebGL2RenderingContext;
       if (this._glContext) {
         const gl = this._glContext;
         this._isSupported = true;
         gl.getExtension('EXT_color_buffer_float');
         this.MAX_TEXTURE_SIZE = gl.getParameter(gl.MAX_TEXTURE_SIZE);
-        this.MAX_TEXTURE_IMAGE_UNITS = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS);
+        this.MAX_TEXTURE_IMAGE_UNITS =
+            gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS);
         this.createCommonVertexShader();
       } else {
         console.warn(
@@ -188,9 +189,10 @@ class WebGLBackend implements Backend {
   }
 
   /**
-   * Store reference to WebGL texture or buffer on class instance, useful for when we want to delete later
+   * Store reference to WebGL texture or buffer on class instance, useful for
+   * when we want to delete later
    */
-  storeRef(texOrBuf : WebGLTexture|WebGLBuffer) {
+  storeRef(texOrBuf: WebGLTexture|WebGLBuffer) {
     if (texOrBuf instanceof WebGLTexture) {
       this._refs.textures.push(texOrBuf);
     } else if (texOrBuf instanceof WebGLBuffer) {
@@ -202,8 +204,8 @@ class WebGLBackend implements Backend {
    * Deletes all stored references to WebGL textures and buffers
    */
   clearRefs() {
-    const gl = this._glContext
-    this._refs.textures.forEach(texture => gl.deleteTexture(texture));
+    const gl = this._glContext;
+     this._refs.textures.forEach(texture => gl.deleteTexture(texture));
     this._refs.buffers.forEach(buffer => gl.deleteBuffer(buffer));
     this._refs = { textures: [], buffers: [] }
   }
@@ -221,7 +223,8 @@ class WebGLBackend implements Backend {
     gl.bindBuffer(gl.ARRAY_BUFFER, positionVertexObj);
     this.storeRef(positionVertexObj);
 
-    const vs = new Float32Array([-1.0, -1.0, 0.0, 1.0, -1.0, 0.0, 1.0, 1.0, 0.0, -1.0, 1.0, 0.0]);
+    const vs = new Float32Array(
+        [-1.0, -1.0, 0.0, 1.0, -1.0, 0.0, 1.0, 1.0, 0.0, -1.0, 1.0, 0.0]);
     gl.bufferData(gl.ARRAY_BUFFER, vs, gl.STATIC_DRAW);
     gl.vertexAttribPointer(position, 3, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(position);
@@ -229,14 +232,19 @@ class WebGLBackend implements Backend {
     const texcoord = gl.getAttribLocation(program, 'texcoord');
     const texcoordVertexObj = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, texcoordVertexObj);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0]), gl.STATIC_DRAW);
+    gl.bufferData(
+        gl.ARRAY_BUFFER,
+        new Float32Array([0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0]),
+        gl.STATIC_DRAW);
     gl.vertexAttribPointer(texcoord, 2, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(texcoord);
     this.storeRef(texcoordVertexObj);
 
     const indicesVertexObj = gl.createBuffer();
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indicesVertexObj);
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array([0, 1, 2, 0, 2, 3]), gl.STATIC_DRAW);
+    gl.bufferData(
+        gl.ELEMENT_ARRAY_BUFFER, new Uint16Array([0, 1, 2, 0, 2, 3]),
+        gl.STATIC_DRAW);
     this.storeRef(indicesVertexObj);
   }
 
@@ -252,18 +260,17 @@ class WebGLBackend implements Backend {
   }
 
   free(t: Tensor): void {
-   delete t.data;
+    delete t.data;
   }
 
-  /**
-   * Bind output texture
-   */
+
   bindOutputTexture(outputTexture: WebGLTexture, shape: number[], framebuffer?: WebGLFramebuffer) {
     const gl = this._glContext;
     gl.viewport(0, 0, shape[1], shape[0]);
     const activeFramebuffer = framebuffer || gl.createFramebuffer();
     gl.bindFramebuffer(gl.FRAMEBUFFER, activeFramebuffer);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, outputTexture, 0);
+    gl.framebufferTexture2D(
+        gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, outputTexture, 0);
     // check if you can read from this type of texture.
     if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE) {
       throw new Error('Can not read from this type of texture.')
@@ -276,11 +283,15 @@ class WebGLBackend implements Backend {
 
     if (!bt._texture && bt.calulateTexture2DShape(this.MAX_TEXTURE_SIZE)) {
       const texture = gl.createTexture();
-      const tt = (bt._dtype == 'int32') ? gl.INT : ((bt._dtype == 'bool')? gl.BYTE : gl.FLOAT);
-  
+      const tt = (bt._dtype == 'int32') ?
+          gl.INT :
+          ((bt._dtype == 'bool') ? gl.BYTE : gl.FLOAT);
+
       gl.bindTexture(gl.TEXTURE_2D, texture);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, bt._texW, bt._texH, 0, gl.RED, tt, bt._array.data as Float32Array, 0);
-  
+      gl.texImage2D(
+          gl.TEXTURE_2D, 0, gl.R32F, bt._texW, bt._texH, 0, gl.RED, tt,
+          bt._array.data as TypedArray, 0);
+
       // clamp to edge
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
@@ -292,11 +303,13 @@ class WebGLBackend implements Backend {
     return bt._texture;
   }
 
-  readSync(x: Tensor): TypedArray {
-    let ndx = ndarrayOf(x);
+  getCpuMemArray(x: Tensor): NdArray{
+    ASSERT(backendTensorOf(x) != null, "No backend tensor found");
+
+    let ndx = NdArrayOf(x);
     if (!ndx) {
       const bt = backendTensorOf(x);
-      if (!bt || !(bt._texture)) {
+      if (!(bt._texture)) {
         throw new Error('No memory data, nor gpu data!');
       }
       const gl = this._glContext;
@@ -305,51 +318,63 @@ class WebGLBackend implements Backend {
       const framebuffer = gl.createFramebuffer();
       try {
         gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, bt._texture, 0);
+        gl.framebufferTexture2D(
+            gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, bt._texture,
+            0);
         // check if you can read from this type of texture.
-        if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE) {
+        if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !=
+            gl.FRAMEBUFFER_COMPLETE) {
           throw new Error('Can not read from this type of texture.')
         }
         // Read the contents of the framebuffer (data stores the pixel data)
         const rgbaData = new Float32Array(bt._texW * bt._texH * 4);
         gl.readPixels(0, 0, bt._texW, bt._texH, gl.RGBA, gl.FLOAT, rgbaData);
+
         // Array could be treat as shape [bt._texH, bt._texW, 4]
-       // const shapeRed = bt._axisY.map(i => bt._shape[i]).concat(bt._axisX.map(i => bt._shape[i]));
-        //const shapeWithRGBA = shapeRed.push(4);
-        //const rgbaPickR = ndarray(rgbaData, shapeWithRGBA).pick(...shapeRed.map(i => null), 0);
-      
-      // const rData = new Float32Array(bt._texW * bt._texH);
-      //  bt._array = ndarray(rData, shapeRed);
-       // nd_ops.assign(bt._array, rgbaPickR);
-        ndx = ndarrayOf(x);
-      }
-      finally {
+        const shapeRed = bt._axisY.map(i => bt.shape()[i])
+                              .concat(bt._axisX.map(i => bt.shape()[i]));
+        const shapeWithRGBA = shapeRed.slice(0);
+        shapeWithRGBA.push(4);
+        ndx = new NdArray(rgbaData, shapeWithRGBA).pick([
+          ...shapeRed.map(i => null), 0
+        ]);
+      } finally {
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         gl.deleteFramebuffer(framebuffer);
       }
     }
+    return ndx;
+  }
+
+  readSync(x: Tensor): TypedArray {
+    let ndx = this.getCpuMemArray(x);
     if (ndx) {
-      //return ndx.data;
+      return ndx.rebuild().data as TypedArray;
     }
     return null;
   }
 
   transpose(x: Tensor, perm: number[]): Tensor {
-    throw new Error('Not implemented');
+    const bt = backendTensorOf(x);
+    if (!bt._texture) this.create2DGLTexture(bt);
+
+    const nda = this.getCpuMemArray(x).transpose(perm);
+    return Tensor.fromBackend(new WebGLTensor(nda, x.dtype));
   }
 
-  matMul(a: Tensor, b: Tensor, transposeA?: boolean, transposeB?: boolean): Tensor {
+  matMul(a: Tensor, b: Tensor, transposeA?: boolean, transposeB?: boolean):
+      Tensor {
     throw new Error('Not implemented');
   }
 
   reshape(x: Tensor, newShape: Shape): Tensor {
-    throw new Error('Not implemented');
+    const nda = this.getCpuMemArray(x).reshape(newShape);
+    return Tensor.fromBackend(new WebGLTensor(nda, x.dtype));
   }
 
   add(a: Tensor, b: Tensor): Tensor {
     throw new Error('Not implemented');
   }
-
 
   neg(x: Tensor): Tensor {
     throw new Error('Not implemented');
