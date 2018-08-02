@@ -311,11 +311,11 @@ export class NDView {
         if (!forceTotalRebuild) {
             if (this.padding == null && this.gather == null && this.repeat == null && this.size == this.coreSize) {
                 if (this.coreOffset == 0 && this.size == this.data.length) {
-                    let isStrideDesc = true;
-                    for (let i = 0; i < this.coreShape.length - 1; ++i) {
-                        if (this.coreStride[i] < this.coreStride[i+1]) isStrideDesc = false;
+                    let squeezed = this.squeeze();
+                    let strideRebuild = NDView.buildStride(squeezed.coreShape);
+                    if (strideRebuild.every((v, idx) => v === squeezed.coreStride[idx])) {
+                        return this.data;
                     }
-                    if (isStrideDesc) return this.data;
                 }
             }
         }
