@@ -5,21 +5,6 @@ import {Tensor} from '../tensor';
 import {BackendTensor, DataType, Shape, TypedArray} from '../types';
 import {assert as ASSERT} from '../utils/gadget';
 
-const vertexShaderSource = `
-#version 300 es
-precision highp float;
-
-in vec3 position;
-in vec2 texcoord;
-out vec2 outTex;
-
-void main () {
-  gl_Position = vec4(position, 1.0);
-  outTex = texcoord;
-}
-`;
-
-
 class WebGLTensor implements BackendTensor {
   // basic info, TODO: combine with _array: ndarray
   _dtype: DataType;
@@ -135,6 +120,20 @@ class WebGLBackend implements Backend {
   createCommonVertexShader() {
     const gl = this._glContext
 
+    const vertexShaderSource = 
+          `#version 300 es
+          precision highp float;
+
+          in vec3 position;
+          in vec2 texcoord;
+          out vec2 outTex;
+
+          void main () {
+            gl_Position = vec4(position, 1.0);
+            outTex = texcoord;
+          }
+          `;
+
     const vertexShader = gl.createShader(gl.VERTEX_SHADER);
     gl.shaderSource(vertexShader, vertexShaderSource);
     gl.compileShader(vertexShader);
@@ -143,7 +142,7 @@ class WebGLBackend implements Backend {
     if (!success) {
       console.error(gl.getShaderInfoLog(vertexShader));
       gl.deleteShader(vertexShader);
-      this._isSupported = false;
+      throw new Error('Can not compile pass through vertex shader!');
     }
 
     this._vertexShader = vertexShader;
@@ -168,7 +167,6 @@ class WebGLBackend implements Backend {
     if (!success) {
       console.error(gl.getShaderInfoLog(fragmentShader));
       gl.deleteShader(fragmentShader);
-      this._isSupported = false;
     }
 
     // create program and attach compiled shaders
@@ -269,8 +267,7 @@ class WebGLBackend implements Backend {
     gl.viewport(0, 0, shape[1], shape[0]);
     const activeFramebuffer = framebuffer || gl.createFramebuffer();
     gl.bindFramebuffer(gl.FRAMEBUFFER, activeFramebuffer);
-    gl.framebufferTexture2D(
-        gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, outputTexture, 0);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, outputTexture, 0);
     // check if you can read from this type of texture.
     if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE) {
       throw new Error('Can not read from this type of texture.')
@@ -278,21 +275,45 @@ class WebGLBackend implements Backend {
     if (!framebuffer) gl.deleteFramebuffer(activeFramebuffer);
   }
 
+  // create2DRenderTexture(texW: number, texH: number) : WebGLTexture {
+  //   const gl = this._glContext;
+
+  //     const texture = gl.createTexture();
+  //     gl.bindTexture(gl.TEXTURE_2D, texture);
+
+  //     const level = 0;
+  //     const internalFormat = gl.R32F; //gl.RGBA;
+  //     const border = 0;
+  //     const format = gl.RED; //gl.RGBA;
+  //     const pixelDataType = gl.FLOAT;
+  //     const data = null;
+  //     gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, texW, texH, border, format, pixelDataType, data);
+
+  //     // clamp to edge
+  //     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  //     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  //     // no interpolation
+  //     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  //     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+
+  //     return texture;
+  // }
+
   create2DGLTexture(bt: WebGLTensor): WebGLTexture {
     const gl = this._glContext;
 
     if (!bt._texture && bt.calulateTexture2DShape(this.MAX_TEXTURE_SIZE)) {
       const texture = gl.createTexture();
-      const tt = (bt._dtype == 'int32') ?
-          gl.INT :
-          ((bt._dtype == 'bool') ? gl.BYTE : gl.FLOAT);
 
       gl.bindTexture(gl.TEXTURE_2D, texture);
-      if (bt._array.data) {
-        gl.texImage2D(
-          gl.TEXTURE_2D, 0, gl.R32F, bt._texW, bt._texH, 0, gl.RED, tt,
-          bt._array.data as TypedArray, 0);
-      }
+      const level = 0;
+      const internalFormat = gl.R32F;
+      const border = 0;
+      const format = gl.RED; 
+      const pixelDataType = (bt._dtype == 'int32') ? gl.INT : ((bt._dtype == 'bool') ? gl.UNSIGNED_BYTE : gl.FLOAT);
+      const data = bt._array.data as TypedArray;
+      gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, bt._texW, bt._texH, border, format, pixelDataType, data);
+
       // clamp to edge
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
@@ -308,7 +329,7 @@ class WebGLBackend implements Backend {
     ASSERT(backendTensorOf(x) != null, "No backend tensor found");
 
     let ndx = NdArrayOf(x);
-    if (!ndx) {
+    if (!ndx || !ndx.data) {
       const bt = backendTensorOf(x);
       if (!(bt._texture)) {
         throw new Error('No memory data, nor gpu data!');
@@ -317,14 +338,11 @@ class WebGLBackend implements Backend {
 
       // Create a framebuffer backed by the texture
       const framebuffer = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
       try {
-        gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-        gl.framebufferTexture2D(
-            gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, bt._texture,
-            0);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, bt._texture, 0);
         // check if you can read from this type of texture.
-        if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !=
-            gl.FRAMEBUFFER_COMPLETE) {
+        if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !=  gl.FRAMEBUFFER_COMPLETE) {
           throw new Error('Can not read from this type of texture.')
         }
         // Read the contents of the framebuffer (data stores the pixel data)
@@ -336,9 +354,7 @@ class WebGLBackend implements Backend {
                               .concat(bt._axisX.map(i => bt.shape()[i]));
         const shapeWithRGBA = shapeRed.slice(0);
         shapeWithRGBA.push(4);
-        ndx = new NdArray(rgbaData, shapeWithRGBA).pick([
-          ...shapeRed.map(i => null), 0
-        ]);
+        ndx = new NdArray(rgbaData, shapeWithRGBA).pick([...shapeRed.map(i => -1), 0]);
       } finally {
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         gl.deleteFramebuffer(framebuffer);
@@ -348,6 +364,13 @@ class WebGLBackend implements Backend {
   }
 
   readSync(x: Tensor): TypedArray {
+    const bt = backendTensorOf(x);
+
+    //hack to see texture works fine
+    if (bt._array.data != null && bt._texture == null) {
+      this.create2DGLTexture(bt);
+      bt._array.data = null;
+    }
     let ndx = this.getCpuMemArray(x);
     if (ndx) {
       return ndx.rebuild().data as TypedArray;
@@ -365,53 +388,68 @@ class WebGLBackend implements Backend {
 
   matMul(a: Tensor, b: Tensor, transposeA?: boolean, transposeB?: boolean):  Tensor {
       const bta = backendTensorOf(a);
-      if (!bta._texture) this.create2DGLTexture(bta);
+      if (!bta._texture) {
+        this.create2DGLTexture(bta);
+      }
       const btb = backendTensorOf(b);
-      if (!btb._texture) this.create2DGLTexture(btb);
+      if (!btb._texture) {
+        this.create2DGLTexture(btb);
+      }
       
       const shapeC = [a.shape[0], b.shape[1]];
       const code = `#version 300 es
-                    precision highp float;
+precision highp float;
 
-                    in vec2 outTex;
-                    uniform sampler2D A;
-                    uniform sampler2D B;
-                    out vec4 outColor;
+in vec2 outTex;
+uniform sampler2D A;
+uniform sampler2D B;
+out vec4 outColor;
 
-                    void main() {
-                      ivec2 A_size = textureSize(A, 0);
-                      ivec2 B_size = textureSize(B, 0);
-                      int out_x = int(float(B_size[0]) * outTex.x);
-                      int out_y = int(float(A_size[1]) * outTex.y);
-                      int commonDim = A_size[0];
+void main() {
+  ivec2 A_size = textureSize(A, 0);
+  ivec2 B_size = textureSize(B, 0);
+  int out_x = int(float(B_size[0]) * outTex.x);
+  int out_y = int(float(A_size[1]) * outTex.y);
+  int commonDim = A_size[0];
 
-                      float sum = 0.;
-                      for (int i = 0; i < commonDim; ++i) {
-                        float a = texelFetch(A, ivec2(i, out_y), 0).r;
-                        float b = texelFetch(B, ivec2(out_x, i), 0).r;
-                        sum += a * b;
-                      }
+  float sum = 0.;
+  for (int i = 0; i < commonDim; ++i) {
+    float a = texelFetch(A, ivec2(i, out_y), 0).r;
+    float b = texelFetch(B, ivec2(out_x, i), 0).r;
+    sum += a * b;
+  }
 
-                      outColor = vec4(sum);
-                    }
-                    `;
+  outColor = vec4(100.0, 0.0, 0.0, 0.0);
+}
+`;
       const program = this.compileProgram(code);
       const btr = new WebGLTensor(new NDView(null, shapeC));
+      //btr.calulateTexture2DShape(this.MAX_TEXTURE_SIZE);
       this.create2DGLTexture(btr);
       
       this.runProgram(program, btr, [{name: 'A', backendTensor: bta}, {name: 'B', backendTensor: btb}], null);
 
-      throw new Error('Not implemented');
+      return Tensor.fromBackend(btr);
   }
 
-  bindUniforms(program: WebGLProgram, uniforms: {value, type, name}[]) {
+  bindUniforms(program: WebGLProgram, uniforms: { value : number|number[], type: DataType, name: string }[]) {
     const gl = this._glContext;
     uniforms.forEach(({ value, type, name }) => {
         const loc = gl.getUniformLocation(program, name);
-        if (type === 'float') {
-          gl.uniform1f(loc, value);
-        } else if (type === 'int' || type === 'bool') {
-          gl.uniform1i(loc, value);
+        if (type === 'float32') {
+          if (Array.isArray(value)) {
+            eval(`gl.uniform${value.length}fv(loc, value)`);
+          }
+          else {
+            gl.uniform1f(loc, value as number);
+          }
+        } else if (type === 'int32' || type === 'bool') {
+          if (Array.isArray(value)) {
+            eval(`gl.uniform${value.length}fi(loc, value)`);
+          }
+          else {
+            gl.uniform1i(loc, value as number);
+          }
         }
       }
     )
@@ -420,10 +458,10 @@ class WebGLBackend implements Backend {
   /**
    * Bind input textures within program
    */
-  bindInputTextures(program: WebGLProgram, inputs: {name: string, backendTensor: WebGLTensor}[]) {
+  bindInputTextures(program: WebGLProgram, inTextures: {name: string, backendTensor: WebGLTensor}[]) {
     const gl = this._glContext;
 
-    inputs.forEach(({backendTensor, name}, i) => {
+    inTextures.forEach(({backendTensor, name}, i) => {
         gl.activeTexture(gl.TEXTURE0 + i);
         gl.bindTexture(gl.TEXTURE_2D, backendTensor._texture);
         gl.uniform1i(gl.getUniformLocation(program, name), i);
@@ -434,17 +472,18 @@ class WebGLBackend implements Backend {
   runProgram(
         program: WebGLProgram, 
         output: WebGLTensor, 
-        inputs: {name: string, backendTensor: WebGLTensor}[], 
-        uniforms: { value, type, name }[]) 
+        inTextures: {name: string, backendTensor: WebGLTensor}[], 
+        uniforms: { value : number|number[], type: DataType, name: string }[]) 
   {
     const gl = this._glContext;
     gl.useProgram(program);
-    if (uniforms && Array.isArray(uniforms)) {
+
+    if (uniforms) {
       this.bindUniforms(program, uniforms);
     }
 
     this.bindOutputTexture(output._texture, [output._texW, output._texH]);
-    this.bindInputTextures(program, inputs);
+    this.bindInputTextures(program, inTextures);
     gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0)
   }
 

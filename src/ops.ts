@@ -10,16 +10,15 @@ function printTensor(
     x.print(number2string, excludeLastAxis, excludeHiAxises);
 }
 
-// TODO: figure out 'this' handling issue
-const transpose =  ENV.engine.backend.transpose;
-const matMul = ENV.engine.backend.matMul;
-const neg = ENV.engine.backend.neg;
-const add = ENV.engine.backend.add;
-const multiply = ENV.engine.backend.multiply;
-const relu = ENV.engine.backend.relu;
-const readSync = ENV.engine.backend.readSync;
-const reshape = ENV.engine.backend.reshape;
-const conv2d = ENV.engine.backend.conv2d;
+const transpose =  ENV.engine.backend.transpose.bind(ENV.engine.backend);
+const matMul = ENV.engine.backend.matMul.bind(ENV.engine.backend);
+const neg = ENV.engine.backend.neg.bind(ENV.engine.backend);
+const add = ENV.engine.backend.add.bind(ENV.engine.backend);
+const multiply = ENV.engine.backend.multiply.bind(ENV.engine.backend);
+const relu = ENV.engine.backend.relu.bind(ENV.engine.backend);
+const readSync = ENV.engine.backend.readSync.bind(ENV.engine.backend);
+const reshape = ENV.engine.backend.reshape.bind(ENV.engine.backend);
+const conv2d = ENV.engine.backend.conv2d.bind(ENV.engine.backend);
 
 // static Tensor methods
 const tensor = Tensor.create;

@@ -23,6 +23,8 @@
   },
   "homepage": "https://github.com/zhangleihuanrong/jsdl#readme",
   "dependencies": {
+    "@types/lodash": "^4.14.115",
+    "lodash": "^4.17.10",
     "ndarray": "^1.0.18",
     "ndarray-gemm": "^1.0.0",
     "ndarray-ops": "^1.2.2",

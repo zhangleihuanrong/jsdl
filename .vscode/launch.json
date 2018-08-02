@@ -29,7 +29,7 @@
                 "--timeout",
                 "999999",
                 "--colors",
-                "${workspaceFolder}/test/test_*.ts"
+                "${workspaceFolder}/test/test_MatMul.ts"
             ],
             "internalConsoleOptions": "openOnSessionStart",
             "protocol": "inspector"

@@ -304,17 +304,19 @@ export class NDView {
     }
 
 
-    rebuildData(): NdArrayLike {
+    rebuildData(forceTotalRebuild: boolean = false): NdArrayLike {
         if (this.data == null) return null;
         
         // Check originality
-        if (this.padding == null && this.gather == null && this.repeat == null && this.size == this.coreSize) {
-            if (this.coreOffset == 0 && this.size == this.data.length) {
-                let isStrideDesc = true;
-                for (let i = 0; i < this.coreShape.length - 1; ++i) {
-                    if (this.coreStride[i] < this.coreStride[i+1]) isStrideDesc = false;
+        if (!forceTotalRebuild) {
+            if (this.padding == null && this.gather == null && this.repeat == null && this.size == this.coreSize) {
+                if (this.coreOffset == 0 && this.size == this.data.length) {
+                    let isStrideDesc = true;
+                    for (let i = 0; i < this.coreShape.length - 1; ++i) {
+                        if (this.coreStride[i] < this.coreStride[i+1]) isStrideDesc = false;
+                    }
+                    if (isStrideDesc) return this.data;
                 }
-                if (isStrideDesc) return this.data;
             }
         }
 
@@ -340,13 +342,9 @@ export class NDView {
     }
 
 
-    rebuild(forceCopy: boolean = false) : NDView {
-        let pureCore: NDView = this;
-        if (this.padding || this.gather || this.repeat || forceCopy) {
-            const arr = this.rebuildData();
-            pureCore = new NDView(arr, this.shape, null, 0, null, null, null, 0);
-        }
-        return pureCore;
+    rebuild(forceTotalRebuild: boolean = false) : NDView {
+        const arr = this.rebuildData(forceTotalRebuild);
+        return new NDView(arr, this.shape);
     }
 
     expandDim(axis?: number) : NDView {
