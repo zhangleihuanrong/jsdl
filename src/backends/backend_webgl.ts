@@ -123,7 +123,7 @@ class WebGLBackend implements Backend {
   transpose(x: Tensor, perm: number[]): Tensor {
     const bt = backendTensorOf(x);
     const ndarr = bt._array.transpose(perm);
-    return Tensor.fromBackend(new WebGLTensor(ndarr, bt._dtype, bt._texture, bt._texShape));
+    return Tensor.fromBackend(new WebGLTensor(ndarr, bt._dtype, bt._texture, bt._texShape, bt._texFlatLen));
   }
 
   matMul(a: Tensor, b: Tensor, transposeA?: boolean, transposeB?: boolean): Tensor {
