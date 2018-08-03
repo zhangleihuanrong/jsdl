@@ -1,6 +1,6 @@
 import { DataType, TypedArray } from '../../types';
 import { assert as ASSERT } from '../../utils/gadget';
-import { NDView as NdArray } from '../../NdView/ndview'
+//import { NDView as NdArray } from '../../NdView/ndview'
 
 const vertexShaderSource = `#version 300 es
 precision highp float;
@@ -155,6 +155,15 @@ export class WebGL2Driver {
         const border = 0;
         const format = gl.RED;
         const pixelDataType = (dtype == 'int32') ? gl.INT : ((dtype == 'bool') ? gl.UNSIGNED_BYTE : gl.FLOAT);
+        if (data != null && data.length < W * H) {
+            const arrayType = (dtype == 'int32') ? 'Int32Array' : ((dtype == 'bool') ? 'Uint8Array' : 'Float32Array');
+            const sz = W * H;
+            const extData: TypedArray = eval(`new ${arrayType}(${sz})`);
+            for (let i = 0; i < sz; ++i) {
+                extData[i] = (i < data.length) ? data[i] : 0;
+            }
+            data = extData;
+        }
         gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, W, H, border, format, pixelDataType, data);
 
         // clamp to edge
@@ -274,9 +283,9 @@ export class WebGL2Driver {
             const pixelDataType = (dtype == 'int32') ? gl.INT : ((dtype == 'bool') ? gl.UNSIGNED_BYTE : gl.FLOAT);
             const rgbaData: TypedArray = eval(`new ${arrayType}(${len})`);
             gl.readPixels(0, 0, W, H, gl.RGBA, pixelDataType, rgbaData);
-            ndx = new NdArray(rgbaData, [H, W, 4]).pick([-1, -1, 0]).rebuildData() as TypedArray;
-            if (flatLen < W * H) {
-                ndx = eval(`new ${arrayType}(ndx.data.buffer, 0, ${flatLen})`);
+            ndx = eval(`new ${arrayType}(${flatLen})`);
+            for (let i = 0; i < flatLen; ++i) {
+                ndx[i] = rgbaData[i * 4];
             }
         } finally {
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);

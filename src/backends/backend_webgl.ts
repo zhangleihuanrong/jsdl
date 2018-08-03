@@ -1,12 +1,13 @@
 import { Backend } from '../backend';
 import { ENV } from '../environments';
-import { NDView as NdArray, NDView } from '../NdView/ndview';
+import { NDView as NdArray } from '../NdView/ndview';
 import { Tensor } from '../tensor';
 import { BackendTensor, DataType, Shape, TypedArray } from '../types';
 import { assert as ASSERT } from '../utils/gadget';
 import { WebGL2Driver } from './webgl/webgl2';
+import { CoordinateMapping } from './webgl/coord2D';
 
-class WebGLTensor implements BackendTensor {
+export class WebGLTensor implements BackendTensor {
   // basic info, TODO: combine with _array: ndarray
   _dtype: DataType;
 
@@ -17,20 +18,23 @@ class WebGLTensor implements BackendTensor {
   // which means we could do logic shape/transform/gather/padding/repeat/slice/step...
   // on the _array part with even when its data set to null.
   _texture: WebGLTexture;  // 2D Texture
-  _texShape: [number, number];
+  _texShape: [number, number]; // W*H
+  _texFlatLen: number; // it could be little smaller than W*H
 
-  constructor(ndarr: NdArray, dtype: DataType = 'float32', texture: WebGLTexture = null, texShape: [number, number] = null) {
+  constructor(ndarr: NdArray, dtype: DataType = 'float32', texture: WebGLTexture = null, texShape: [number, number] = null, texFlatLen: number = 0) {
     this._dtype = dtype;
     this._array = ndarr;
     this._texture = texture;
     this._texShape = texShape;
+    this._texFlatLen = texFlatLen;
   }
 
   MoveDataToGpu(webgl: WebGL2Driver): WebGLTensor {
     if (!this._texture) {
       ASSERT(this._array.data != null, "No CPU Data exists.")
-      this._texShape = webgl.calc2DTextureSizeForShape(this.shape());
+      this._texShape = webgl.calc2DTextureSizeForFlatLen(this._array.data.length);
       this._texture = webgl.create2DGLTexture(this._array.data as TypedArray, this._texShape, this._dtype);
+      this._texFlatLen = this._array.data.length;
       this._array.data = null;  // clear cpu data
     }
     return this;
@@ -38,10 +42,12 @@ class WebGLTensor implements BackendTensor {
 
   PrepareGpuData(webgl: WebGL2Driver): WebGLTensor {
     if (!this._texture) {
-      // create texture for render into it, no matter cpu data exists or not?
-      this._texShape = webgl.calc2DTextureSizeForShape(this.shape());
+      ASSERT(this._array.data == null, "cpu data already exists");
+      // create texture for render into it, no cpu data should exists
+      // infact, should only have shape and stride, others should be null or zero.
+      this._texShape = webgl.calc2DTextureSizeForFlatLen(this.size());
       this._texture = webgl.create2DGLTexture(null, this._texShape, this._dtype);
-      this._array.data = null;  // clear cpu data
+      this._texFlatLen = this.size();
     }
     return this;
   }
@@ -49,7 +55,7 @@ class WebGLTensor implements BackendTensor {
   DumpDataFromGPU(webgl: WebGL2Driver): WebGLTensor {
     if (!this._array.data) {
       ASSERT(this._texShape != null, "No GPU data exists!");
-      const ta = webgl.DumpTexture(this._texture, this._texShape, this._array.size, this._dtype);
+      const ta = webgl.DumpTexture(this._texture, this._texShape, this._texFlatLen, this._dtype);
       this._array.data = ta;
     }
     return this;
@@ -102,9 +108,9 @@ class WebGLBackend implements Backend {
     const bt = backendTensorOf(x);
 
     //hack to see texture works or not at all
-    // if (bt._array.data != null && bt._texture == null) {
-    //   bt.MoveDataToGpu(this.webgl);
-    // }
+    if (bt._array.data != null && bt._texture == null) {
+      bt.MoveDataToGpu(this.webgl);
+    }
 
     bt.DumpDataFromGPU(this.webgl);
     let ndx = bt._array;
@@ -121,46 +127,55 @@ class WebGLBackend implements Backend {
   }
 
   matMul(a: Tensor, b: Tensor, transposeA?: boolean, transposeB?: boolean): Tensor {
-    const bta = backendTensorOf(a).MoveDataToGpu(this.webgl);
-    const btb = backendTensorOf(b).MoveDataToGpu(this.webgl);
+    const A = backendTensorOf(a).MoveDataToGpu(this.webgl);
+    const B = backendTensorOf(b).MoveDataToGpu(this.webgl);
 
     const shapeC = [a.shape[0], b.shape[1]];
+    const C = new WebGLTensor(new NdArray(null, shapeC)).PrepareGpuData(this.webgl);
+
     const code = `#version 300 es
 precision highp float;
+precision highp int;
 
 in vec2 outTex;
 uniform sampler2D A;
 uniform sampler2D B;
 out vec4 outColor;
 
+${CoordinateMapping.glslGet(A, 'A')}
+
+${CoordinateMapping.glslGet(B, 'B')}
+ 
 void main() {
   ivec2 A_size = textureSize(A, 0);
   ivec2 B_size = textureSize(B, 0);
-  int out_x = int(float(B_size[0]) * outTex.x);
-  int out_y = int(float(A_size[1]) * outTex.y);
-  int commonDim = A_size[0];
+
+  // should be output C's texW and C's texH
+  int out_x = int(2.0 * outTex.x);
+  int out_y = int(2.0 * outTex.y);
+  int commonDim = ${A._array.shape[1]};
 
   float sum = 0.;
   for (int i = 0; i < commonDim; ++i) {
-    float a = texelFetch(A, ivec2(i, out_y), 0).r;
-    float b = texelFetch(B, ivec2(out_x, i), 0).r;
+    float a = getA(out_y, i);
+    float b = getB(i, out_x);
     sum += a * b;
   }
 
-  outColor = vec4(sum, 0.0, 0.0, 0.0);
+  outColor = vec4(sum);
 }
 `;
+    console.log(code);
     const program = this.webgl.compileProgram(code);
-    const btr = new WebGLTensor(new NDView(null, shapeC)).PrepareGpuData(this.webgl);
 
     this.webgl.runProgram(
       program,
-      btr._texture,
-      btr._texShape,
-      [{ name: 'A', texture: bta._texture }, { name: 'B', texture: btb._texture }], 
+      C._texture,
+      C._texShape,
+      [{ name: 'A', texture: A._texture }, { name: 'B', texture: B._texture }], 
       null);
 
-    return Tensor.fromBackend(btr);
+    return Tensor.fromBackend(C);
   }
 
   reshape(x: Tensor, newShape: Shape): Tensor {
