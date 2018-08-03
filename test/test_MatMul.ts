@@ -16,8 +16,16 @@ describe("Tensor MatMul", function() {
     a.name = 'a_5x3';
     tf.print(a);
 
-    a = tf.transpose(a, [1,0]);
+    a = tf.transpose(a, [1, 0]);
     a.name = 'aTranspose_3x5';
+    tf.print(a);
+
+    a = tf.transpose(a, [1, 0]);
+    a.name = 'aTT_5x3';
+    tf.print(a);
+
+    a = tf.reshape(a, [3, 5]);
+    a.name = 'aTTReshape_3x5';
     tf.print(a);
     
     const b = tf.tensor([1, 0.5, 1, 0.5, 1, 0.5, 1, 0.5, 1, 0.5], [5, 2]);

@@ -34,6 +34,7 @@ export type NdArrayLike = number[] | boolean[] | string[] | Float32Array | Int32
 //
 export class NDView {
     data: NdArrayLike = null;
+    readonly dataLen: number; // in case data is empty.
     readonly coreShape: number[];
     readonly coreStride: number[];
     readonly coreOffset: number;
@@ -52,21 +53,37 @@ export class NDView {
 
     // data could be null
     constructor(
-        data: NdArrayLike, 
+        data: NdArrayLike,
         shape: number[],
+        dataLen: number = 0,
         stride: number[] = null, 
         offset: number = 0,
         gather: number[][] = null,
         repeat: number[] = null,
         padding: [number, number][] = null,
         paddingValue : string | number = 0) {
-
-        //TODO: slice(0) for all the non-null parameters except data
+    
         const self = this;
+
         ASSERT(shape != null && shape.every(v => v > 0 && (v == (v|0))), 'Dimensions must all positive integers!');
         this.coreShape = shape.slice(0);
         const rank = this.coreShape.length;
         this.coreSize = this.coreShape.reduce((m, v) => m * v, 1);
+
+        this.dataLen = dataLen;
+        if (dataLen > 0) {
+            ASSERT(data == null || dataLen == data.length, "data not matching it length");
+        }
+        else {
+            if (data) {
+                this.dataLen = data.length;
+            }
+            else {
+                ASSERT(stride == null && offset == 0 && gather == null && repeat == null && padding == null, 
+                    "Can only decide data len without data by shape only (no more active others)");
+                this.dataLen = this.coreSize;
+            }
+        }
 
         this.coreStride = stride ? stride.slice(0) : NDView.buildStride(shape);
         ASSERT(this.coreStride.length == rank, 'strides must of same length as shape!');
@@ -189,7 +206,7 @@ export class NDView {
         ASSERT(perm.length == rank, 'Wrong permutation size!');
 
         const check = new Array(rank).fill(0);
-        perm.forEach(v => { if (v >= 0 && v < rank)++(check[v]); });
+        perm.forEach(v => { if (v >= 0 && v < rank) ++(check[v]); });
         ASSERT(check.every(v => v === 1), 'Wrong permutation!');
         if (check.every((v, i) => v == i)) return this;
 
@@ -198,7 +215,7 @@ export class NDView {
         const nGather = (self.gather) ? self.gather.map((v, i, a) => a[perm[i]]) : null;
         const nRepeat = (self.repeat) ? self.repeat.map((v, i, a) => a[perm[i]]) : null;
         const nPadding = (self.padding) ? self.padding.map((v, i, a) => a[perm[i]]) : null;
-        return new NDView(this.data, nshape, nstride, this.coreOffset, nGather, nRepeat, nPadding, this.paddingValue);
+        return new NDView(this.data, nshape, this.dataLen, nstride, this.coreOffset, nGather, nRepeat, nPadding, this.paddingValue);
     }
 
 
@@ -228,7 +245,7 @@ export class NDView {
                 if (nPadding != null) nPadding.push(this.padding[axis]);
             }
         }
-        return new NDView(this.data, nShape, nStride, nOffset, nGather, nRepeat, nPadding, this.paddingValue);
+        return new NDView(this.data, nShape, this.dataLen, nStride, nOffset, nGather, nRepeat, nPadding, this.paddingValue);
     }
 
 
@@ -272,7 +289,7 @@ export class NDView {
             if (epadding) epadding.splice(nposition, 1);
         }
 
-        return new NDView(this.data, eshape, estride, this.coreOffset, egather, erepeat, epadding, this.paddingValue);
+        return new NDView(this.data, eshape, this.dataLen, estride, this.coreOffset, egather, erepeat, epadding, this.paddingValue);
     }
 
 
@@ -300,26 +317,29 @@ export class NDView {
             }
         }
 
-        return new NDView(this.data, eshape, estride, this.coreOffset, egather, erepeat, epadding, this.paddingValue);
+        return new NDView(this.data, eshape, this.dataLen, estride, this.coreOffset, egather, erepeat, epadding, this.paddingValue);
     }
 
-
-    rebuildData(forceTotalRebuild: boolean = false): NdArrayLike {
-        if (this.data == null) return null;
-        
-        // Check originality
-        if (!forceTotalRebuild) {
-            if (this.padding == null && this.gather == null && this.repeat == null && this.size == this.coreSize) {
-                if (this.coreOffset == 0 && this.size == this.data.length) {
-                    let squeezed = this.squeeze();
-                    let strideRebuild = NDView.buildStride(squeezed.coreShape);
-                    if (strideRebuild.every((v, idx) => v === squeezed.coreStride[idx])) {
-                        return this.data;
-                    }
+    isOriginalCore() : boolean {
+        if (this.padding == null && this.gather == null && this.repeat == null) {
+            if (this.coreOffset == 0 && this.coreSize == this.dataLen) {
+                let squeezed = this.squeeze();
+                let strideRebuild = NDView.buildStride(squeezed.coreShape);
+                if (strideRebuild.every((v, idx) => v === squeezed.coreStride[idx])) {
+                    return true;
                 }
             }
         }
+        return false;
+    }
 
+    private compactData(): NdArrayLike {
+        if (this.data == null) {
+            console.log("XXXXX.....XXXXX....need real data...");
+            return null;  // need data
+        }
+        
+        console.log("XXXXX.....XXXXX....compacting data...");
         let d: NdArrayLike = null;
         if (Array.isArray(this.data)) {
             d = new Array[this.size];
@@ -337,15 +357,28 @@ export class NDView {
             d = new Uint8Array(this.size);
             this.forEach((v, idx) => d[idx] = v);
         }
-        //TODO, more here
+        else {
+            //TODO, more here
+            throw new Error('not current supported yet.')
+        }
         return d;
     }
 
 
     rebuild(forceTotalRebuild: boolean = false) : NDView {
-        const arr = this.rebuildData(forceTotalRebuild);
+        const isOriginal = this.isOriginalCore();
+        if ((forceTotalRebuild || !isOriginal) && this.data == null) {
+            return null; // we need data to rebuild.
+        }
+        else {
+            if (!forceTotalRebuild && isOriginal) {
+                return this;
+            }
+        }
+        const arr = this.compactData();
         return new NDView(arr, this.shape);
     }
+
 
     expandDim(axis?: number) : NDView {
         axis = axis || 0;
@@ -366,8 +399,9 @@ export class NDView {
         }
         ASSERT(ns == this.size, "Size not matching with original!");
 
-        const arr = this.rebuildData();
-        return new NDView(arr, shape, null, 0, null, null, null, 0);
+        const nt = this.rebuild();
+        if (nt == null) return null; // notify caller that need real data to continue
+        return new NDView(nt.data, shape);
     }
 
 
@@ -375,14 +409,15 @@ export class NDView {
         ASSERT(paddings != null && paddings.length == this.shape.length, "Shape length not matching with padding dimentions");
         ASSERT(paddings.every(v => v != null && v[0] >= 0 && v[1] >= 0), "Padding on axis should all not negative.");
         if (this.gather || this.repeat) {
-            const arr = this.rebuildData();
-            return new NDView(arr, this.shape, null, 0, null, null, paddings, value);
+            const nt = this.rebuild(); // need real data
+            if (nt == null) return null;
+            return new NDView(nt.data, nt.shape, 0, null, 0, null, null, paddings, value);
         }
         
         if (this.padding) {
             paddings = paddings.map((v, i) => [v[0] + this.padding[i][0], v[1] + this.padding[i][1]]) as [number, number][];
         }
-        return new NDView(this.data, this.coreShape, this.coreStride, this.coreOffset, null, null, paddings, value);
+        return new NDView(this.data, this.coreShape, this.dataLen, this.coreStride, this.coreOffset, null, null, paddings, value);
     }
 
 
@@ -394,7 +429,8 @@ export class NDView {
         let ngather: number[][] = this.shape.map((v, idx) => (idx == axis) ? indices : []);
         if (this.padding) {
             const core = this.rebuild();
-            return new NDView(core.data, core.coreShape, core.coreStride, core.coreOffset, ngather, null, null, 0);
+            if (core == null) return null; // need data
+            return new NDView(core.data, core.coreShape, core.dataLen, core.coreStride, core.coreOffset, ngather, null, null, 0);
         }
 
         let nrepeat = (this.repeat) ? this.repeat.slice(0) : null;
@@ -408,7 +444,7 @@ export class NDView {
             ngather = ngather.map((s, idx) => (idx != axis) ? this.gather[idx].slice(0) : s.map(v => this.gather[idx][v]));
         }
 
-        return new NDView(this.data, this.coreShape, this.coreStride, this.coreOffset, ngather, nrepeat, null, 0);
+        return new NDView(this.data, this.coreShape, this.dataLen, this.coreStride, this.coreOffset, ngather, nrepeat, null, 0);
     }
 
     tile(reps: number[]) : NDView {
@@ -418,7 +454,7 @@ export class NDView {
         if (this.repeat) {
             reps = reps.map((v, idx) => (v * this.repeat[idx]));
         }
-        return new NDView(this.data, this.coreShape, this.coreStride, this.coreOffset,
+        return new NDView(this.data, this.coreShape, this.dataLen, this.coreStride, this.coreOffset,
                           this.gather, reps, this.padding, this.paddingValue);
     }
 
@@ -427,7 +463,8 @@ export class NDView {
         ASSERT(steps && steps.length != this.shape.length && steps.every(v => (v|0) != 0),
                "steps must all be non-zero numbers!");
         steps = steps.map(v => v | 0); // to integer
-        let pureCore = this.rebuild(false);
+        let pureCore = this.rebuild();
+        if (pureCore == null) return null; // need data
 
         let noffset = pureCore.coreOffset;
         const nshape = pureCore.shape.slice(0);
@@ -440,7 +477,7 @@ export class NDView {
             nshape[i] = Math.ceil(nshape[i] / Math.abs(d));
             nstride[i] *= d;
         }
-        return new NDView(pureCore.data, nshape, nstride, noffset, null, null, null, 0);
+        return new NDView(pureCore.data, nshape, pureCore.dataLen, nstride, noffset, null, null, null, 0);
     }
 
 
@@ -462,7 +499,9 @@ export class NDView {
         ASSERT(sizes.every((s, idx) => (s == -1 || (s > 0 && s + start[idx] <= this.shape[idx]))), "sizes out of boundary");
 
         //lo
-        const pureCore = this.rebuild(false);
+        const pureCore = this.rebuild();
+        if (pureCore == null) return null; // need data
+
         let noffset = pureCore.coreOffset;
         const nshape = pureCore.coreShape.slice(0);
         const nstride = pureCore.coreStride.slice(0);
@@ -476,7 +515,7 @@ export class NDView {
             if (sizes[i] > 0) nshape[i] = sizes[i];
         }
 
-        return new NDView(pureCore.data, nshape, nstride, noffset, null, null, null, 0);
+        return new NDView(pureCore.data, nshape, pureCore.dataLen, nstride, noffset, null, null, null, 0);
     }
 
 
