@@ -83,4 +83,27 @@ describe("Tensor MatMul", function() {
     assert(areTwoArrayLikeEqual(mul.shape, gold.shape), "result shape error!");
     assert(areTwoArrayLikeEqual(tf.readSync(gold), tf.readSync(mul)), "result data error!");
   });
+
+  it("a[1024*1024] * b[1024x1024]", function() {
+    const startInitA = new Date().getTime();
+    let a = tf.randomNorm([2048, 2048], 2.0, 3.0, 'float32', 10000);
+    const msInitA = (new Date()).getTime() - startInitA;
+    console.log(`  Finish initialize A 2048 in ${msInitA}ms.`);
+    //tf.print(a, null, [3, 2], [3, 2]);
+
+    const startInitB = new Date().getTime();
+    let b = tf.randomNorm([2048, 2048], 1.0, 2.0, 'float32', 20000);
+    let msInitB = (new Date()).getTime() - startInitB;
+    console.log(`  Finish initialize B 2048 in ${msInitB}ms.`);
+    //tf.print(b, null, [3, 2], [3, 2]);
+    
+    const startMatMul = new Date().getTime();
+    console.log('start mat mul............');
+    let mul = tf.matMul(a, b, false, false);
+    let msMatMul = (new Date()).getTime() - startMatMul;
+    console.log(`  Finish MatMul in ${msMatMul}ms. result is of shape: ${mul.shape}`);
+
+    assert(true, "");
+  }).timeout(200000);
+
 });
