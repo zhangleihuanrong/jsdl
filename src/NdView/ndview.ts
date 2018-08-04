@@ -2,7 +2,7 @@ import { assert as ASSERT } from '../utils/gadget';
 
 // N Dimention View structure on plain array.
 // No data is stored or used here.
-export type NdArrayLike = number[] | boolean[] | string[] | Float32Array | Int32Array | Uint8Array | Uint8ClampedArray | Float64Array;
+export type NdArrayLike = number[] | boolean[] | string[] | Float32Array | Int32Array | Uint8Array | Uint8ClampedArray;
 
 // Need support:
 // transpose in place,
@@ -152,7 +152,6 @@ export class NDView {
         this.data = data;
     }
 
-
     static buildStride(shape: number[]) : number[] {
         const stride: number[] = shape.map(v => 1);
         for (let i = shape.length - 2; i >= 0; --i) {
@@ -161,9 +160,48 @@ export class NDView {
         return stride;
     }
 
-    
+    generateCalcPosition(idxValueNames: string[]) {
+        const aa = this.coreStride.map((v, i) => ` + v * ${idxValueNames[i]} `).join('');
+        return `${this.coreOffset} + ${aa}`;
+    }
+
+    generateGatherDefinedCode(defineNamePrefix:string, indent: string) : string {
+        const codes: string[] = [];
+        if (this.gather) {
+            for (let axis = 0; axis < this.shape.length; ++axis) {
+                if (this.gather[axis].length > 0) {
+                    codes.push(`${indent} const ${defineNamePrefix}${axis} = ${JSON.stringify(this.gather[axis])};`)
+                }
+            }
+        }
+        return codes.join('\n');;
+    }
+
+    generateCoreIndexOnAxisCode(axis: number, outerIndex: string, coreIndex: string, gatherDefined: string, indent: string) : string {
+        const codes: string[] = [];
+        const coreWide = this.coreShape[axis];
+        codes.push(`let ${coreIndex} = ${outerIndex};`);
+        if (this.repeat) {
+            let cgpWide = coreWide;
+            if (this.padding) cgpWide += (this.padding[axis][0] + this.padding[axis][1]);
+            if (this.gather && this.gather[axis].length > 0) cgpWide = this.gather[axis].length;
+            codes.push(`${coreIndex} = ${coreIndex} % ${cgpWide};`);
+        }
+
+        if (this.padding && (this.padding[axis][0] > 0 || this.padding[axis][1] > 0)) {
+            codes.push(`${indent} if (${coreIndex} >= ${this.padding[axis][0]} && ${coreIndex} < (${this.padding[axis][0]} + ${coreWide})) {`);
+            codes.push(`${indent}   ${coreIndex} = ${coreIndex} - ${this.padding[axis][0]};`);
+            codes.push(`${indent} } else {`);
+            codes.push(`${indent}   ${coreIndex} = -1;`);
+        }
+        else if (this.gather && this.gather[axis].length > 0) {
+            codes.push(`${indent} ${coreIndex} = ${gatherDefined}[outerIndex];`);
+        }
+        return codes.join('\n');
+    } 
+
     // no error check for performance
-    private coreIndexOnAxis(outerIndex: number, axis: number) : number {
+    coreIndexOnAxis(outerIndex: number, axis: number) : number {
         const coreWide = this.coreShape[axis];
         if (this.repeat) {
             let cgpWide = coreWide;
@@ -362,6 +400,10 @@ export class NDView {
         }
         else if (this.data instanceof Uint8Array) {
             d = new Uint8Array(this.size);
+            this.forEach((v, idx) => d[idx] = v);
+        }
+        else if (this.data instanceof Uint8ClampedArray) {
+            d = new Uint8ClampedArray(this.size);
             this.forEach((v, idx) => d[idx] = v);
         }
         else {

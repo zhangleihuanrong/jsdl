@@ -9,7 +9,6 @@ import { CoordinateMapping } from './webgl/coord2D';
 import { canBroadcastTo, getUnsqueezeAxisForBroadcast, getUnsqueezedShapeForBroadcast, getBroadcastRepeats } from '../utils/shapeTools';
 
 export class WebGLTensor implements BackendTensor {
-  // basic info, TODO: combine with _array: ndarray
   _dtype: DataType;
 
   _array: NdArray;
@@ -119,7 +118,9 @@ class WebGLBackend implements Backend {
   }
 
   make(t: Tensor, dtype: DataType, shape: number[], values: TypedArray): void {
-    t.data = new WebGLTensor(new NdArray(values, shape), dtype);
+    const bt = new WebGLTensor(new NdArray(values, shape), dtype);
+    bt.MoveDataToGpu(this.webgl);
+    t.data = bt;
   }
 
   free(t: Tensor): void {
