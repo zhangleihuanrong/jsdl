@@ -108,26 +108,23 @@ class JsNdarrayBackend implements Backend {
 
         const codeLines : string[] = [];
         codeLines.push(`const generatedMatMul = function(C, A, B) {`);
-        let indent = '   ';
+        let indent = ' ';
         codeLines.push(A.generateGatherDefinedCode('gatherA_', indent));
         codeLines.push(B.generateGatherDefinedCode('gatherB_', indent));
-        // codeLines.push(`${indent} const offsetA = new Array(${rankC}).fill(0);`);
-        // codeLines.push(`${indent} const offsetB = new Array(${rankC}).fill(0);`);
-        // codeLines.push(`${indent} const offsetC = new Array(${rankC}).fill(0);`);
         for (let h = 0; h < rankC; ++h) {
-            indent = `${indent}  `;
+            indent = `${indent}    `;
             codeLines.push(`${indent} for (let i${h} = 0; i${h} < ${shapeC[h]}; ++i${h}) {`);
             codeLines.push(A.generateCoreIndexOnAxisCode(h, `i${h}`, `ai${h}`, `gatherA_${h}`, `${indent}  `));
             codeLines.push(B.generateCoreIndexOnAxisCode(h, `i${h}`, `bi${h}`, `gatherB_${h}`, `${indent}  `));
             if (h == 0) {
                 codeLines.push(`${indent}   let offsetA${h} = ${A.coreOffset} + ai${h} * ${A.coreStride[h]};`);
                 codeLines.push(`${indent}   let offsetB${h} = ${B.coreOffset} + bi${h} * ${B.coreStride[h]};`);
-                codeLines.push(`${indent}   let offsetB${h} = ${C.coreOffset} + ci${h} * ${B.coreStride[h]};`);
+                codeLines.push(`${indent}   let offsetC${h} = ${C.coreOffset} + i${h} * ${C.coreStride[h]};`);
             }
             else {
                 codeLines.push(`${indent}   let offsetA${h} = offsetA${h-1}  + ai${h} * ${A.coreStride[h]};`);
                 codeLines.push(`${indent}   let offsetB${h} = offsetB${h-1}  + bi${h} * ${B.coreStride[h]};`);
-                codeLines.push(`${indent}   let offsetB${h} = offsetC${h-1}  + ci${h} * ${B.coreStride[h]};`);
+                codeLines.push(`${indent}   let offsetC${h} = offsetC${h-1}  + i${h} * ${C.coreStride[h]};`);
             }
         }
 

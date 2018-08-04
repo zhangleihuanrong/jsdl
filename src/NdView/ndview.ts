@@ -180,12 +180,12 @@ export class NDView {
     generateCoreIndexOnAxisCode(axis: number, outerIndex: string, coreIndex: string, gatherDefined: string, indent: string) : string {
         const codes: string[] = [];
         const coreWide = this.coreShape[axis];
-        codes.push(`let ${coreIndex} = ${outerIndex};`);
+        codes.push(`${indent} let ${coreIndex} = ${outerIndex};`);
         if (this.repeat) {
             let cgpWide = coreWide;
             if (this.padding) cgpWide += (this.padding[axis][0] + this.padding[axis][1]);
             if (this.gather && this.gather[axis].length > 0) cgpWide = this.gather[axis].length;
-            codes.push(`${coreIndex} = ${coreIndex} % ${cgpWide};`);
+            codes.push(`${indent} ${coreIndex} = ${coreIndex} % ${cgpWide};`);
         }
 
         if (this.padding && (this.padding[axis][0] > 0 || this.padding[axis][1] > 0)) {
