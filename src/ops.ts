@@ -19,6 +19,9 @@ const relu = ENV.engine.backend.relu.bind(ENV.engine.backend);
 const readSync = ENV.engine.backend.readSync.bind(ENV.engine.backend);
 const reshape = ENV.engine.backend.reshape.bind(ENV.engine.backend);
 const conv2d = ENV.engine.backend.conv2d.bind(ENV.engine.backend);
+const tile =  ENV.engine.backend.tile.bind(ENV.engine.backend);
+const pick =  ENV.engine.backend.pick.bind(ENV.engine.backend);
+
 
 // static Tensor methods
 const tensor = Tensor.create;
@@ -32,7 +35,7 @@ export { tensor, randomNorm, randomUniform, truncatedNorm,
 
         printTensor as print, 
         
-        transpose, reshape, 
+        transpose, reshape, tile, pick,
         
         matMul, neg, add, multiply, relu,
 

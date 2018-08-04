@@ -10,7 +10,7 @@ export interface Backend extends TensorManager{
 
     conv2d(x: Tensor, filter: Tensor, strides: number | [number, number], padding: number[], dataFormat: 'NHWC' | 'NCHW', dialations: number | [number, number]) : Tensor;
     reshape(x: Tensor, newShape: number[]) : Tensor;
-    transpose(x: Tensor, perm: number[]) : Tensor;
+    transpose(x: Tensor, perm?: number[]) : Tensor;
     matMul(a : Tensor, b: Tensor, transposeA?: boolean, transposeB?: boolean): Tensor;
 
     neg(a: Tensor): Tensor;
@@ -22,4 +22,7 @@ export interface Backend extends TensorManager{
 
     // slice(x: Tensor, begin: number[], size: number[]) : Tensor;
     // pad(x: Tensor, paddings: Array<[number, number]>, padValue: number): Tensor;
+    tile(x: Tensor, repeats: number[]) : Tensor;
+    pick(x: Tensor, indices: number[]) : Tensor;
+
 }

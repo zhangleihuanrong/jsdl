@@ -93,7 +93,7 @@ class JsNdarrayBackend implements Backend {
         return null;
     }
 
-    transpose(x: Tensor, perm: number[]): Tensor {
+    transpose(x: Tensor, perm?: number[]): Tensor {
         const bt = ndarrayOf(x);
         const trans = bt.transpose(...perm);
         const y = Tensor.fromBackend(new NdarrayTensor(trans));
@@ -251,6 +251,14 @@ class JsNdarrayBackend implements Backend {
         nd_ops.maxs(ndy, ndx, 0);
         y.name = `Tensor${y.id}_relu_${x.id}`;
         return y;
+    }
+
+    tile(x: Tensor, repeats: number[]) : Tensor {
+        return null;
+    }
+
+    pick(x: Tensor, indices: number[]) : Tensor {
+        return null;
     }
 }
 

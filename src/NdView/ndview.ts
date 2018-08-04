@@ -11,6 +11,13 @@ export type NdArrayLike = number[] | boolean[] | string[] | Float32Array | Int32
 // padding in place*,
 // repeat in place*
 //
+// design choice:
+// padding could be treat as gather. for example, on given axis:
+//    pad(2, 1)  =  gather[-1, -1, 0, .... N-1, -1]
+// Yet it will make internal data big, especially after pad(repeat(pad)).
+// So currently, just special treat pad with gather.
+// Another way is to make gather/pad/repeat/slice.. some wrapper (?). maybe not good enough.
+//
 // pad in place works on core*, but not works together with other two: gather and repeat to simplify.
 // 
 // gather & repeat: 
@@ -201,8 +208,8 @@ export class NDView {
 
     transpose(perm?: number[]): NDView {
         const self = this;
-        const rank = this.coreShape.length;
-        perm = perm || ((new Array(rank)).map((v, i) => rank - 1 - i));
+        const rank = this.shape.length;
+        perm = perm || ((new Array(rank)).fill(0).map((v, i) => rank - 1 - i));
         ASSERT(perm.length == rank, 'Wrong permutation size!');
 
         const check = new Array(rank).fill(0);

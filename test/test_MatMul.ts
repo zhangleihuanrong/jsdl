@@ -11,7 +11,26 @@ function areTwoArrayLikeEqual<T extends number[] | Float32Array | Int32Array | U
 }
 
 describe("Tensor MatMul", function() {
-  it("a[2x5] * b[5x2]", function() {
+  it("a[3x5] * b[5x2]", function() {
+    const a = tf.tensor([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5], [3, 5]);
+    a.name = 'a_3x5';
+    tf.print(a);
+
+    const b = tf.tensor([1, 0.5, 1, 0.5, 1, 0.5, 1, 0.5, 1, 0.5], [5, 2]);
+    tf.print(b);
+    
+    const mul = tf.matMul(a, b, false, false);
+    tf.print(mul);
+
+    const gold = tf.tensor([15, 7.5, 40, 20, 15, 7.5], [3, 2]);
+    gold.name = "Golden";
+    tf.print(gold);
+
+    assert(areTwoArrayLikeEqual(mul.shape, gold.shape), "result shape error!");
+    assert(areTwoArrayLikeEqual(tf.readSync(gold), tf.readSync(mul)), "result data error!");
+  });
+
+  it("a[5x3].transpose.transpose.reshape([3x5]) * b[5x2]", function() {
     let a = tf.tensor([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5], [5, 3]);
     a.name = 'a_5x3';
     tf.print(a);
@@ -27,14 +46,37 @@ describe("Tensor MatMul", function() {
     a = tf.reshape(a, [3, 5]);
     a.name = 'aTTReshape_3x5';
     tf.print(a);
-    
+
     const b = tf.tensor([1, 0.5, 1, 0.5, 1, 0.5, 1, 0.5, 1, 0.5], [5, 2]);
     tf.print(b);
     
-    const mul = tf.matMul(a, b);
+    const mul = tf.matMul(a, b, false, false);
     tf.print(mul);
 
     const gold = tf.tensor([15, 7.5, 40, 20, 15, 7.5], [3, 2]);
+    gold.name = "Golden";
+    tf.print(gold);
+
+    assert(areTwoArrayLikeEqual(mul.shape, gold.shape), "result shape error!");
+    assert(areTwoArrayLikeEqual(tf.readSync(gold), tf.readSync(mul)), "result data error!");
+  });
+
+  it("a[1x3x5].tile(2,1,1) * b[5x2]", function() {
+    let a = tf.tensor([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5], [1, 3, 5]);
+    a = tf.tile(a, [2, 1, 1]);
+    a.name = 'a_Tile_2x3x5';
+    tf.print(a);
+
+    let b = tf.tensor([1, 0.5, 1, 0.5, 1, 0.5, 1, 0.5, 1, 0.5], [1, 5, 2]);
+    b = tf.transpose(b, [2, 1, 0]);
+    tf.print(b);
+    
+    let mul = tf.matMul(a, b, false, true);
+    mul.name = 'matMul result';
+    tf.print(mul);
+
+    let gold = tf.tensor([15, 7.5, 40, 20, 15, 7.5], [1, 3, 2]);
+    gold = tf.tile(gold, [2, 1, 1]);
     gold.name = "Golden";
     tf.print(gold);
 

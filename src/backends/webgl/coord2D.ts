@@ -16,7 +16,6 @@ export class CoordinateMapping {
 
     //     return texelFetch(A, ivec2(texX, texY), 0).r;
     // }
-
     static glslGet(x: WebGLTensor, name: string, functionPrefix = 'get'): string {
         const nda = x._array;
 
@@ -27,75 +26,96 @@ export class CoordinateMapping {
         }
         codes.push(') {\n');
 
-        // handle repeat/padding/gather logic if needed
-        for (let i = 0; i < x.shape.length; ++i) {
-            if (nda.gather) {
-                if (nda.repeat && nda.repeat[i] > 1) {
-                    const repWide = (nda.gather[i].length > 0) ? nda.gather[i].length : nda.coreShape[i];
-                    codes.push(`  i${i} = i${i} % ${repWide};\n`);
+        if (nda.shape.length == 2 && nda.isOriginalCore() && nda.shape[0] == x._texShape[1] && nda.shape[1] == x._texShape[0]) {
+            codes.push(`  return texelFetch(${name}, ivec2(i1, i0), 0).r;\n`);
+        }
+        else {
+            // handle repeat/padding/gather logic if needed
+            for (let i = 0; i < nda.shape.length; ++i) {
+                if (nda.gather) {
+                    if (nda.repeat && nda.repeat[i] > 1) {
+                        const repWide = (nda.gather[i].length > 0) ? nda.gather[i].length : nda.coreShape[i];
+                        codes.push(`  i${i} = i${i} - (${repWide} * int(i${i}/${repWide}));\n`);
+                    }
+                    if (nda.gather[i].length > 0) {
+                        const gatherWide = nda.gather[i].length;
+                        codes.push(`  const int gather${i}[${gatherWide}] = int[${gatherWide}](${nda.gather[i]});\n`);
+                        codes.push(`  i${i} = gather${i}[i${i}];\n`);
+                    }
                 }
-                if (nda.gather[i].length > 0) {
-                    const gatherWide = nda.gather[i].length;
-                    codes.push(`  const int gather${i}[${gatherWide}] = int[${gatherWide}](${nda.gather[i]});\n`);
-                    codes.push(`  i${i} = gather${i}[i${i}];\n`);
+                else if (nda.padding) {
+                    const padTheAxis = (nda.padding[i] && (nda.padding[i][0] > 0 || nda.padding[i][1] > 0));
+                    if (nda.repeat && nda.repeat[i] > 1) {
+                        const repWide = nda.coreShape[i] + ((padTheAxis) ? (nda.padding[i][0] + nda.padding[i][1]) : 0);
+                        codes.push(`  i${i} = i${i} - (${repWide} * int(i${i}/${repWide}));\n`);
+                    }
+                    if (padTheAxis) {
+                        const rightBoundary = nda.padding[i][0] + nda.coreShape[i];
+                        // accessing the padding value
+                        codes.push(`  if (i${i} < ${nda.padding[i][0]} || i${i} >= ${rightBoundary}) { return float(${nda.paddingValue}); } \n`);
+                        codes.push(`  i${i} = i${i} - ${nda.padding[i][0]};\n`);
+                    }
+                }
+                else {
+                    if (nda.repeat && nda.repeat[i] > 1) {
+                        const repWide = nda.coreShape[i];
+                        codes.push(`  i${i} = i${i} - (${repWide} * int(i${i}/${repWide}));\n`);
+                    }
                 }
             }
-            if (nda.padding) {
-                const padTheAxis = (nda.padding[i] && (nda.padding[i][0] > 0 || nda.padding[i][1] > 0));
-                if (nda.repeat && nda.repeat[i] > 1) {
-                    const repWide = nda.coreShape[i] + ((padTheAxis) ? (nda.padding[i][0] + nda.padding[i][1]) : 0);
-                    codes.push(`  i${i} = i${i} % ${repWide};\n`);
-                }
-                if (padTheAxis) {
-                    const rightBoundary = nda.padding[i][0] + nda.coreShape[i];
-                    // accessing the padding value
-                    codes.push(`  if (i${i} < ${nda.padding[i][0]} || i${i} >= ${rightBoundary}) { return float(${nda.paddingValue}); } \n`);
-                    codes.push(`  i${i} = i${i} - ${nda.padding[i][0]};\n`);
-                }
+
+            codes.push(`  int coreIndex = ${nda.coreOffset}`);
+            for (let i = 0; i < nda.coreShape.length; ++i) {
+                codes.push(` + i${i} * ${nda.coreStride[i]}`);
             }
-        }
+            codes.push('; \n')
 
-        codes.push(`  int coreIndex = ${nda.coreOffset}`);
-        for (let i = 0; i < nda.coreShape.length; ++i) {
-            codes.push(` + i${i} * ${nda.coreStride[i]}`);
-        }
-        codes.push('; \n')
-
-        codes.push(`
-  int texY = int(coreIndex / ${x._texShape[0]}); // texW
-  int texX = coreIndex - (texY * ${x._texShape[0]});
-  return texelFetch(${name}, ivec2(texX, texY), 0).r;
-`);
-        codes.push('}\n');
-
+            codes.push(`  int texY = int(coreIndex / ${x._texShape[0]}); // texW\n`);
+            codes.push(`  int texX = coreIndex - (texY * ${x._texShape[0]});\n`);
+            codes.push(`  return texelFetch(${name}, ivec2(texX, texY), 0).r;\n`);
+        } // end of common processing
+        codes.push('}');
         return codes.join('');
     }
 
     // this tensor is for render output, so it only contains shape/stride
-    static snippetLogicFormST(x: WebGLTensor, name: string, indexPrefix = 'i', stPrefix: string = 'outTex'): string {
-
-//         if (x._array.shape.length == 2 && x._array.shape[0] == x._texShape[1] && x._array.shape[1] == x._texShape[0]) {
-//             return `
-//   int ${indexPrefix}${name}_1  = int(float(${x._array.shape[1]}) * ${stPrefix}.s); //${name}._texW = ${x._array.shape[1]}
-//   int ${indexPrefix}${name}_0  = int(float(${x._array.shape[0]}) * ${stPrefix}.t); //${name}._texH = ${x._array.shape[0]}
-// `;
-//         }
-        
+    static snippetLogicFormST(x: WebGLTensor, name: string, indexPrefix = 'idx_', stPrefix: string = 'outTex'): string {
         const nda = x._array;
         const codes: string[] = [];
-        codes.push(`
-  int ${indexPrefix}${name}_x  = int(float(${x._array.shape[1]}) * ${stPrefix}.s); //${name}._texW = ${x._array.shape[1]}
-  int ${indexPrefix}${name}_y  = int(float(${x._array.shape[0]}) * ${stPrefix}.t); //${name}._texH = ${x._array.shape[0]}
-  int indexOf${name} = ${indexPrefix}${name}_y * ${x._array.shape[1]} + ${indexPrefix}${name}_x;
 
-`);
+        if (x._array.shape.length == 2 && x._array.shape[0] == x._texShape[1] && x._array.shape[1] == x._texShape[0]) {
+            codes.push(`int ${indexPrefix}1  = int(float(${x._array.shape[1]}) * ${stPrefix}.s); //${name}._texW = ${x._array.shape[1]}\n`);
+            codes.push(`  int ${indexPrefix}0  = int(float(${x._array.shape[0]}) * ${stPrefix}.t); //${name}._texH = ${x._array.shape[0]}`);
+            return codes.join('');
+        }
+        
+        codes.push(`int ${indexPrefix}x = int(float(${x._texShape[0]}) * ${stPrefix}.s); //${name}._texW\n`);
+        codes.push(`  int ${indexPrefix}y = int(float(${x._texShape[1]}) * ${stPrefix}.t); //${name}._texH\n`);
+        codes.push(`  int indexOf${name} = ${indexPrefix}y * ${x._texShape[0]} + ${indexPrefix}x;\n`);
 
-      for (let i = 0; i < nda.coreShape.length; ++i) {
-          const stride = nda.coreStride[i];
-          codes.push(`  int ${indexPrefix}${name}_${i} =  int(indexOf${name} / ${stride});\n`);
-          codes.push(`  indexOf${name} -= ${indexPrefix}${name}_${i} * ${stride};\n`);
-      }
-      codes.push('\n');
-      return codes.join('');
+        for (let i = 0; i < nda.coreShape.length; ++i) {
+            const stride = nda.coreStride[i];
+            codes.push(`  int ${indexPrefix}${i} =  int(indexOf${name} / ${stride});`);
+            if (i != nda.coreShape.length - 1) {
+                codes.push(`\n  indexOf${name} -= (${indexPrefix}${i} * ${stride});\n`);
+            }
+        }
+        return codes.join('');
     }
+
+    static argList(argCount: number, indexPrefix = 'idx_', ...replaces: [number, string][]) : string {
+        const parts = [];
+        for (let i = 0; i < argCount; ++i) {
+            if (i > 0) parts.push(', ');
+            const pair = replaces.find((v, idx) => v[0] == i);
+            parts.push( pair ? pair[1] : `${indexPrefix}${i}` );
+        }
+        return parts.join('');
+    }
+
+    static snippetGet2D(texName: string, y = 'i0', x = 'i1'): string {
+        return `texelFetch(${name}, ivec2(${x}, ${y}), 0).r`;
+    }
+
+
 }
