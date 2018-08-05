@@ -107,36 +107,88 @@ class JsNdarrayBackend implements Backend {
         C.shape;
 
         const codeLines : string[] = [];
-        codeLines.push(`const generatedMatMul = function(C, A, B) {`);
-        let indent = ' ';
-        codeLines.push(A.generateGatherDefinedCode('gatherA_', indent));
-        codeLines.push(B.generateGatherDefinedCode('gatherB_', indent));
+        //codeLines.push(`const matMulFunc = function(C, A, B) {`);
+        let indent = '    ';
+        const gatherAsnippet = A.generateGatherDefinedCode('gatherA_', indent);
+        if (gatherAsnippet) codeLines.push(gatherAsnippet);
+        const gatherBsnippet = B.generateGatherDefinedCode('gatherB_', indent);
+        if (gatherBsnippet) codeLines.push(gatherBsnippet);
         for (let h = 0; h < rankC; ++h) {
+            codeLines.push(`${indent}for (let i${h} = 0; i${h} < ${shapeC[h]}; ++i${h}) {`);
             indent = `${indent}    `;
-            codeLines.push(`${indent} for (let i${h} = 0; i${h} < ${shapeC[h]}; ++i${h}) {`);
-            codeLines.push(A.generateCoreIndexOnAxisCode(h, `i${h}`, `ai${h}`, `gatherA_${h}`, `${indent}  `));
-            codeLines.push(B.generateCoreIndexOnAxisCode(h, `i${h}`, `bi${h}`, `gatherB_${h}`, `${indent}  `));
+            if (h != rankC - 1) {
+                codeLines.push(A.generateCoreIndexOnAxisCode(h, `i${h}`, `ai${h}`, `gatherA_${h}`, `${indent}`));
+            }
+            if (h != rankC - 2) {
+                codeLines.push(B.generateCoreIndexOnAxisCode(h, `i${h}`, `bi${h}`, `gatherB_${h}`, `${indent}`));
+            }
+
             if (h == 0) {
-                codeLines.push(`${indent}   let offsetA${h} = ${A.coreOffset} + ai${h} * ${A.coreStride[h]};`);
-                codeLines.push(`${indent}   let offsetB${h} = ${B.coreOffset} + bi${h} * ${B.coreStride[h]};`);
-                codeLines.push(`${indent}   let offsetC${h} = ${C.coreOffset} + i${h} * ${C.coreStride[h]};`);
+                // codeLines.push(`${indent}let offsetA${h} = ${A.coreOffset} + ai${h} * ${A.coreStride[h]};`);
+                // codeLines.push(`${indent}let offsetB${h} = ${B.coreOffset} + bi${h} * ${B.coreStride[h]};`);
+                codeLines.push(`${indent}let offsetC${h} = ${C.coreOffset} + i${h} * ${C.coreStride[h]};`);
             }
             else {
-                codeLines.push(`${indent}   let offsetA${h} = offsetA${h-1}  + ai${h} * ${A.coreStride[h]};`);
-                codeLines.push(`${indent}   let offsetB${h} = offsetB${h-1}  + bi${h} * ${B.coreStride[h]};`);
-                codeLines.push(`${indent}   let offsetC${h} = offsetC${h-1}  + i${h} * ${C.coreStride[h]};`);
+                // codeLines.push(`${indent}let offsetA${h} = offsetA${h-1}  + ai${h} * ${A.coreStride[h]};`);
+                // codeLines.push(`${indent}let offsetB${h} = offsetB${h-1}  + bi${h} * ${B.coreStride[h]};`);
+                codeLines.push(`${indent}let offsetC${h} = offsetC${h-1}  + i${h} * ${C.coreStride[h]};`);
             }
+            codeLines.push(``);
         }
 
-        indent = `${indent}  `;
-        codeLines.push(`${indent} for (let k = 0; k < ${commonDim}; ++k) {`);
+        codeLines.push(`${indent}let sum = 0;`);
+        codeLines.push(`${indent}for (let k = 0; k < ${commonDim}; ++k) {`);
+            indent = `${indent}    `;
+            codeLines.push(A.generateCoreIndexOnAxisCode(rankC-1, `k`, `ak`, `gatherA_${rankC-1}`, `${indent}`));
+            const axisNamesA = A.shape.map((v, i) => (i == rankC-1) ? `ak` : `ai${i}`);
+            codeLines.push(`${indent}let aPosition = ${A.generateCalcPosition(axisNamesA)};`)
 
-        const axisNamesA = A.shape.map((v, i) => (i == rankC-1) ? `k` : `ai${i}`);
-        codeLines.push(`${indent}  aposition = ${A.generateCalcPosition(axisNamesA)};`)
-    
+            codeLines.push(B.generateCoreIndexOnAxisCode(rankC-2, `k`, `bk`, `gatherA_${rankC-2}`, `${indent}`));
+            const axisNamesB = B.shape.map((v, i) => (i == rankC-2) ? `bk` : `bi${i}`);
+            codeLines.push(`${indent}let bPosition = ${B.generateCalcPosition(axisNamesB)};`)
+
+            codeLines.push(`${indent}sum += A[aPosition] * B[bPosition];`);
+            indent = indent.slice(0, indent.length - 4);
+        codeLines.push(`${indent}}`);
+        codeLines.push(`${indent}C[offsetC${rankC-1}] = sum;`);
+
+        for (let h = 0; h < rankC; ++h) {
+            indent = indent.slice(0, indent.length - 4);
+            codeLines.push(`${indent}}`);
+        }
+        //indent = indent.slice(0, indent.length - 4);
+        //codeLines.push(`${indent}};`);
+
+        const matMulCode = codeLines.join('\n');
         console.log("======================================");
-        console.log(codeLines.join('\n'));
-        return null;
+        console.log(matMulCode);
+        console.log("======================================");
+
+        // const func: (C, A, B) => void =         function(C, A, B) {
+        //     for (let i0 = 0; i0 < 3; ++i0) {
+        //         let ai0 = i0;
+        //         let offsetC0 = 0 + i0 * 2;
+        
+        //         for (let i1 = 0; i1 < 2; ++i1) {
+        //             let bi1 = i1;
+        //             let offsetC1 = offsetC0  + i1 * 1;
+        
+        //             let sum = 0;
+        //             for (let k = 0; k < 5; ++k) {
+        //                 let ak = k;
+        //                 let aPosition = 0  + 5 * ai0 + 1 * ak;
+        //                 let bk = k;
+        //                 let bPosition = 0  + 2 * bk + 1 * bi1;
+        //                 sum += A[aPosition] * B[bPosition];
+        //             }
+        //             C[offsetC1] = sum;
+        //         }
+        //     }
+        // };
+
+        const matMulFunc = new Function('C', 'A', 'B', matMulCode);
+        matMulFunc(C.data, A.data, B.data);
+        return Tensor.fromBackend(new NdArrayTensor(C, a.dtype));
     }
 
 

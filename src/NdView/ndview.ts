@@ -161,8 +161,8 @@ export class NDView {
     }
 
     generateCalcPosition(idxValueNames: string[]) {
-        const aa = this.coreStride.map((v, i) => ` + v * ${idxValueNames[i]} `).join('');
-        return `${this.coreOffset} + ${aa}`;
+        const aa = this.coreStride.map((v, i) => ` + ${v} * ${idxValueNames[i]}`).join('');
+        return `${this.coreOffset} ${aa}`;
     }
 
     generateGatherDefinedCode(defineNamePrefix:string, indent: string) : string {
@@ -170,7 +170,7 @@ export class NDView {
         if (this.gather) {
             for (let axis = 0; axis < this.shape.length; ++axis) {
                 if (this.gather[axis].length > 0) {
-                    codes.push(`${indent} const ${defineNamePrefix}${axis} = ${JSON.stringify(this.gather[axis])};`)
+                    codes.push(`${indent}const ${defineNamePrefix}${axis} = ${JSON.stringify(this.gather[axis])};`)
                 }
             }
         }
@@ -180,22 +180,23 @@ export class NDView {
     generateCoreIndexOnAxisCode(axis: number, outerIndex: string, coreIndex: string, gatherDefined: string, indent: string) : string {
         const codes: string[] = [];
         const coreWide = this.coreShape[axis];
-        codes.push(`${indent} let ${coreIndex} = ${outerIndex};`);
+        codes.push(`${indent}let ${coreIndex} = ${outerIndex};`);
         if (this.repeat) {
             let cgpWide = coreWide;
             if (this.padding) cgpWide += (this.padding[axis][0] + this.padding[axis][1]);
             if (this.gather && this.gather[axis].length > 0) cgpWide = this.gather[axis].length;
-            codes.push(`${indent} ${coreIndex} = ${coreIndex} % ${cgpWide};`);
+            codes.push(`${indent}${coreIndex} = ${coreIndex} % ${cgpWide};`);
         }
 
         if (this.padding && (this.padding[axis][0] > 0 || this.padding[axis][1] > 0)) {
-            codes.push(`${indent} if (${coreIndex} >= ${this.padding[axis][0]} && ${coreIndex} < (${this.padding[axis][0]} + ${coreWide})) {`);
-            codes.push(`${indent}   ${coreIndex} = ${coreIndex} - ${this.padding[axis][0]};`);
-            codes.push(`${indent} } else {`);
-            codes.push(`${indent}   ${coreIndex} = -1;`);
+            codes.push(`${indent}if (${coreIndex} >= ${this.padding[axis][0]} && ${coreIndex} < ${this.padding[axis][0] + coreWide}) {`);
+            codes.push(`${indent}    ${coreIndex} = ${coreIndex} - ${this.padding[axis][0]};`);
+            codes.push(`${indent}} else {`);
+            codes.push(`${indent}    ${coreIndex} = -1;`);
+            codes.push(`${indent}}`);
         }
         else if (this.gather && this.gather[axis].length > 0) {
-            codes.push(`${indent} ${coreIndex} = ${gatherDefined}[outerIndex];`);
+            codes.push(`${indent}${coreIndex} = ${gatherDefined}[outerIndex];`);
         }
         return codes.join('\n');
     } 
