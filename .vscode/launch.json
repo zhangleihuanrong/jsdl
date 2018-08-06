@@ -37,6 +37,24 @@
         {
             "type": "node",
             "request": "launch",
+            "name": "Perf ndarray matmul(no browser using ts-node)",
+            "program": "${workspaceFolder}/node_modules/mocha/bin/_mocha",
+            "args": [
+                "-r",
+                "ts-node/register",
+                "-u",
+                "tdd",
+                "--timeout",
+                "999999",
+                "--colors",
+                "${workspaceFolder}/test/perf_ndarrayMatMul.ts"
+            ],
+            "internalConsoleOptions": "openOnSessionStart",
+            "protocol": "inspector"
+        },
+        {
+            "type": "node",
+            "request": "launch",
             "name": "Launch Program",
             "program": "${workspaceFolder}/dist/samples/scratch/scratch",
             "outFiles": [
