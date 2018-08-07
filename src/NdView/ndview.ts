@@ -366,6 +366,10 @@ export class NDView {
         return new NDView(this.data, eshape, this.dataLen, estride, this.coreOffset, egather, erepeat, epadding, this.paddingValue);
     }
 
+    isCoreOnly(): boolean {
+        return (this.padding == null && this.gather == null && this.repeat == null);
+    }
+
     isOriginalCore() : boolean {
         if (this.padding == null && this.gather == null && this.repeat == null) {
             if (this.coreOffset == 0 && this.coreSize == this.dataLen) {

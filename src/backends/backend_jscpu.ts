@@ -6,9 +6,9 @@ import { assert as ASSERT } from '../utils/gadget';
 
 import { NDView as NdArray } from '../NdView/ndview';
 import { canBroadcastTo, getUnsqueezeAxisForBroadcast, getUnsqueezedShapeForBroadcast, getBroadcastRepeats } from '../utils/shapeTools';
-// import * as ndarray from 'ndarray';
-// import * as nd_gemm from 'ndarray-gemm';
-// import * as nd_ops from 'ndarray-ops';
+import * as nd from 'ndarray';
+import * as nd_gemm from 'ndarray-gemm';
+import * as nd_ops from 'ndarray-ops';
 
 class NdArrayTensor implements BackendTensor {
     _dtype: DataType;
@@ -104,7 +104,14 @@ class JsNdarrayBackend implements Backend {
         const rankC = shapeC.length;
         const ta = createTypeArrayForShape(a.dtype, shapeC);
         const C = new NdArray(ta, shapeC);
-        C.shape;
+
+        if (A.isCoreOnly() && B.isCoreOnly() && A.shape.length == 2) {
+            const ndA = nd(A.data, A.shape);
+            const ndB = nd(B.data, B.shape);
+            const ndC = nd(C.data, C.shape);
+            nd_gemm(ndC, ndA, ndB);
+            return Tensor.fromBackend(new NdArrayTensor(C, a.dtype));
+        }
 
         const codeLines : string[] = [];
         //codeLines.push(`const matMulFunc = function(C, A, B) {`);
@@ -124,13 +131,9 @@ class JsNdarrayBackend implements Backend {
             }
 
             if (h == 0) {
-                // codeLines.push(`${indent}let offsetA${h} = ${A.coreOffset} + ai${h} * ${A.coreStride[h]};`);
-                // codeLines.push(`${indent}let offsetB${h} = ${B.coreOffset} + bi${h} * ${B.coreStride[h]};`);
                 codeLines.push(`${indent}let offsetC${h} = ${C.coreOffset} + i${h} * ${C.coreStride[h]};`);
             }
             else {
-                // codeLines.push(`${indent}let offsetA${h} = offsetA${h-1}  + ai${h} * ${A.coreStride[h]};`);
-                // codeLines.push(`${indent}let offsetB${h} = offsetB${h-1}  + bi${h} * ${B.coreStride[h]};`);
                 codeLines.push(`${indent}let offsetC${h} = offsetC${h-1}  + i${h} * ${C.coreStride[h]};`);
             }
             codeLines.push(``);
@@ -156,36 +159,8 @@ class JsNdarrayBackend implements Backend {
             indent = indent.slice(0, indent.length - 4);
             codeLines.push(`${indent}}`);
         }
-        //indent = indent.slice(0, indent.length - 4);
-        //codeLines.push(`${indent}};`);
 
         const matMulCode = codeLines.join('\n');
-        console.log("======================================");
-        console.log(matMulCode);
-        console.log("======================================");
-
-        // const func: (C, A, B) => void =         function(C, A, B) {
-        //     for (let i0 = 0; i0 < 3; ++i0) {
-        //         let ai0 = i0;
-        //         let offsetC0 = 0 + i0 * 2;
-        
-        //         for (let i1 = 0; i1 < 2; ++i1) {
-        //             let bi1 = i1;
-        //             let offsetC1 = offsetC0  + i1 * 1;
-        
-        //             let sum = 0;
-        //             for (let k = 0; k < 5; ++k) {
-        //                 let ak = k;
-        //                 let aPosition = 0  + 5 * ai0 + 1 * ak;
-        //                 let bk = k;
-        //                 let bPosition = 0  + 2 * bk + 1 * bi1;
-        //                 sum += A[aPosition] * B[bPosition];
-        //             }
-        //             C[offsetC1] = sum;
-        //         }
-        //     }
-        // };
-
         const matMulFunc = new Function('C', 'A', 'B', matMulCode);
         matMulFunc(C.data, A.data, B.data);
         return Tensor.fromBackend(new NdArrayTensor(C, a.dtype));
@@ -219,68 +194,111 @@ class JsNdarrayBackend implements Backend {
         return null;
     }
 
-    conv2d(x: Tensor, filter: Tensor, strides: number | [number, number], padding: number[], dataFormat: 'NHWC' | 'NCHW', dilations: number | [number, number] = 1) : Tensor {
-    //     if (!(strides instanceof Array)) strides = [strides as number, strides as number];
-    //     if (!(dilations instanceof Array)) dilations = [dilations as number, dilations as number];
-    //     let ndx = NdArrayOf(x);  // 4d tensor, NHWC or NCHW
-    //     let ndk = NdArrayOf(filter); //[H, W, in, out] or [out, in, H, W]
+    conv2d(
+        x: Tensor, 
+        filter: Tensor, 
+        strides: number | [number, number], 
+        padding: number[], 
+        dataFormat: 'NHWC' | 'NCHW', 
+        dilations: number | [number, number] = 1,
+        groups: number = 1) : Tensor {
+        
+        if (!(Array.isArray(strides))) strides = [strides as number, strides as number];
+        if (!(Array.isArray(dilations))) dilations = [dilations as number, dilations as number];
 
-    //    if (dataFormat == 'NCHW') {
-    //         ndx = ndx.transpose(0, 2, 3, 1);
-    //         ndk = ndk.transpose(2, 3, 1, 0);
-    //     }
+        let ndvx = NdArrayOf(x);  // 4d tensor, NHWC or NCHW
+        let ndvk = NdArrayOf(filter); //[H, W, in, out] or [out, in, H, W]
 
-    //     ndx = nd_pad(ndx, [[0, 0], [padding[0], padding[2]], [padding[1], padding[3]], [0, 0]]);
+        if (dataFormat == 'NCHW') {
+            ndvx = ndvx.transpose([0, 2, 3, 1]);
+            ndvk = ndvk.transpose([2, 3, 1, 0]);
+        }
 
-    //     // calc output shape
-    //     const [batchSize, inputRows, inputCols, inputChannels] = [ndx.shape[0], ndx.shape[1], ndx.shape[2], ndx.shape[3]];
-    //     const [kernelRows, kernelCols, kernelIn, outChannels] =  [ndk.shape[0], ndk.shape[1], ndk.shape[2], ndk.shape[3]];
+        ndvx = ndvx.pad([[0, 0], [padding[0], padding[2]], [padding[1], padding[3]], [0, 0]]);
+        if (!ndvx.isCoreOnly()) ndvx = ndvx.rebuild(true);
+        if (!ndvk.isCoreOnly()) ndvk = ndvk.rebuild(true);
 
-    //     const dilateKernelRows = kernelRows + (kernelRows - 1) * (dilations[0] - 1);
-    //     const dilateKernelCols = kernelCols + (kernelCols - 1) * (dilations[1] - 1);
+        const ndx = nd(ndvx.data, ndvx.shape);
+        const ndk = nd(ndvk.data, ndvk.shape);
 
-    //     if (inputChannels != kernelIn) throw new Error('intput channel do not match kernnels');
-    //     const outRows = Math.floor((inputRows - dilateKernelRows + strides[0]) / strides[0]);
-    //     const outCols = Math.floor((inputCols - dilateKernelCols + strides[1]) / strides[1]);
+        // calc output shape
+        const [batchSize, inputRows, inputCols, inputChannels] = [ndx.shape[0], ndx.shape[1], ndx.shape[2], ndx.shape[3]];
+        const [kernelRows, kernelCols, kernelIn, outChannels] =  [ndk.shape[0], ndk.shape[1], ndk.shape[2], ndk.shape[3]];
+        ASSERT(inputChannels == kernelIn * groups, "intput channel do not match kernnels*groups");
+        ASSERT(Math.floor(outChannels/groups) == outChannels/groups, "group can not equal devide outputChannels");
 
-    //     const outSize = batchSize * outRows * outCols * outChannels;
-    //     const resultTypedArray = new Float32Array(outSize); 
+        const dilateKernelRows = kernelRows + (kernelRows - 1) * (dilations[0] - 1);
+        const dilateKernelCols = kernelCols + (kernelCols - 1) * (dilations[1] - 1);
+        const outRows = Math.floor((inputRows - dilateKernelRows + strides[0]) / strides[0]);
+        const outCols = Math.floor((inputCols - dilateKernelCols + strides[1]) / strides[1]);
+        const outSize = batchSize * outRows * outCols * outChannels;
+        const resultTypedArray = new Float32Array(outSize); 
 
-    //     const sizeOfPatch = kernelRows * kernelCols * inputChannels;
-    //     const patch = ndarray(new Float32Array(sizeOfPatch), [kernelRows, kernelCols, inputChannels]);
-    //     const ndf = ndarray(new Float32Array(sizeOfPatch * outChannels), [sizeOfPatch, outChannels]);
-    //     for (let yC = 0; yC < outChannels; ++yC) {
-    //         nd_ops.assign(patch, ndk.pick(null, null, null, yC));
-    //         const reshaped = ndarray(patch.data, [sizeOfPatch]);
-    //         nd_ops.assign(ndf.pick(null, yC), reshaped);
-    //     }
+        const sizeOfPatch = kernelRows * kernelCols * kernelIn;
+        const patch = nd(new Float32Array(sizeOfPatch), [kernelRows, kernelCols, kernelIn]);
 
-    //     const ndr = ndarray(resultTypedArray, [batchSize, outRows, outCols, outChannels]);
-    //     const pixelResult = ndarray(new Float32Array(outChannels), [1, outChannels]);
-    //     let offset = 0;
-    //     for (let b = 0; b < batchSize; ++b) {
-    //         let singleImage = ndx.pick(b, null, null, null);
-    //         for (let yH = 0; yH < outRows; ++yH) {
-    //             let xH = yH * strides[0];
-    //             for (let yW = 0; yW < outCols; ++yW) {
-    //                 let xW = yW * strides[1];
+        for (let b = 0; b < batchSize; ++b) {
+            let singleImage = ndx.pick(b, null, null, null);
+            const outChannelsPerGroup = outChannels/groups;
+            for (let g = 0; g < groups; ++g) {
+                // Make the input use first input group
+                const nx = singleImage(singleImage.data, ndx.shape);
+                nx.shape = nx.shape.map((v, i) => (i == ndx.shape()-1)? kernelIn : v);
+                nx.offset += g * kernelIn;
+                let offset = g * outChannels/groups;
 
-    //                 let patchView = singleImage
-    //                         .hi(xH + dilateKernelRows, xW + dilateKernelCols, inputChannels)
-    //                         .lo(xH, xW, 0)
-    //                         .step(dilations[0], dilations[1], 1);
-    //                 nd_ops.assign(patch, patchView);
-    //                 const patchInRow:ndarray = ndarray(patch.data, [1, sizeOfPatch]);
+                const ndf = nd(new Float32Array(sizeOfPatch * outChannels), [sizeOfPatch, outChannelsPerGroup]);
+                for (let yC = g * outChannelsPerGroup, yCNext = (g+1) * outChannelsPerGroup; yC < yCNext; ++yC) {
+                    nd_ops.assign(patch, ndk.pick(null, null, null, yC));
+                    const reshaped = nd(patch.data, [sizeOfPatch]);
+                    nd_ops.assign(ndf.pick(null, yC), reshaped);
+                }
+    
+                for (let yH = 0; yH < outRows; ++yH) {
+                    let xH = yH * strides[0];
+                    for (let yW = 0; yW < outCols; ++yW) {
+                        let xW = yW * strides[1];
 
-    //                 nd_gemm(pixelResult, patchInRow, ndf);
-    //                 ndr.data.set(pixelResult.data, offset);
-    //                 offset += outChannels;
-    //             }
-    //         }
-    //     }
+            }
+    
+        }
 
+        for (let g = 0; g < groups; ++g) {
+            // Make the input use first input group
+            const nx = nd(ndx.data, ndx.shape);
+            nx.offset += g * kernelIn; 
+            
+            for (let yC = 0; yC < outChannels; ++yC) {
+                nd_ops.assign(patch, ndk.pick(null, null, null, yC));
+                const reshaped = ndarray(patch.data, [sizeOfPatch]);
+                nd_ops.assign(ndf.pick(null, yC), reshaped);
+            }
+    
+            const ndr = ndarray(resultTypedArray, [batchSize, outRows, outCols, outChannels]);
+            const pixelResult = ndarray(new Float32Array(outChannels), [1, outChannels]);
+            let offset = 0;
+            for (let b = 0; b < batchSize; ++b) {
+                let singleImage = ndx.pick(b, null, null, null);
+                for (let yH = 0; yH < outRows; ++yH) {
+                    let xH = yH * strides[0];
+                    for (let yW = 0; yW < outCols; ++yW) {
+                        let xW = yW * strides[1];
+    
+                        let patchView = singleImage
+                                .hi(xH + dilateKernelRows, xW + dilateKernelCols, inputChannels)
+                                .lo(xH, xW, 0)
+                                .step(dilations[0], dilations[1], 1);
+                        nd_ops.assign(patch, patchView);
+                        const patchInRow:ndarray = ndarray(patch.data, [1, sizeOfPatch]);
+    
+                        nd_gemm(pixelResult, patchInRow, ndf);
+                        ndr.data.set(pixelResult.data, offset);
+                        offset += outChannels;
+                    }
+                }
+            }
+        }
     //     const r = Tensor.create(resultTypedArray, [batchSize, outRows, outCols, outChannels]);
-    //     r.name = `Tensor${r.id}_conv2D_${x.id}_${filter.id}`;
     //     return r;
         return null;
     }

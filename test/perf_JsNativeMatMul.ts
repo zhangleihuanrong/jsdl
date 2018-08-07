@@ -2,8 +2,36 @@ import { assert } from 'chai';
 
 import * as tf from '../src/index';
 
-describe("NativeJsMatMul", function() {
+export function squareMatMul(C: Float32Array, A: Float32Array, B: Float32Array, w: number) {
+    C.fill(0);
+    const _b = 32;
+    for (let z0 = w - _b; z0 >= 0; z0 -= _b) {
+        for (let z1 = w - _b; z1 >= 0; z1 -= _b) {
+            let cob = z0 * w + z1;
+            for (let z2 = w - _b; z2 >= 0; z2 -= _b) {
+                let bob = z2 * w + z1;
+                let aob = z0 * w + z2;
 
+                for (let i = 0; i < _b; ++i) {
+                    let co = cob + i * w;
+                    let ao = aob + i * w;
+                    for (let j = 0; j < _b; ++j) {
+                        let bo = bob + j;
+                        let r = 0.0;
+                        // C[(z0+i)*w + (z1 + j)] = sum(A[(z0+i)*w + (z2 + k)] * B[(z2 + k) * w + (z1+j)])
+                        for (let k = 0; k < _b; ++k) {
+                            r += A[ao+k] * B[bo];
+                            bo += w;
+                        }
+                        C[co++] += r;
+                    }
+                }
+            }
+        }
+    }
+}
+
+describe("NativeJsMatMul", function() {
     for (let w = 32; w <= 1024; w*=2) {
         const startInitA = new Date().getTime();
         let a = tf.randomNorm([w, w], 2.0, 3.0, 'float32', 10000);
@@ -21,33 +49,11 @@ describe("NativeJsMatMul", function() {
         let msInitC = (new Date()).getTime() - startInitC;
         console.log(`  Finish allocat C[${w}*${w}] in ${msInitC}ms.`);
 
-        console.log('start mat mul............');
+        console.log('  Start mat mul............');
         const startMatMul = new Date().getTime();
-        const A = a.data;
-        const B = b.data;
-        for (let blk0 = w-32; blk0 >= 0; blk0 -= 32) {
-            for (let blk1 = w-32; blk1 >= 0; blk1 -= 32) {
-                for (let blk2 = w-32; blk2 >= 0; blk2 -= 32) {
-                    let oc = blk0 * w + blk1;
-                    for (let i = 0; i < 32; ++i) {
-                        for (let j = 0; j < 32; ++j) {
-                            let aa = (blk0 + i) * w + blk2;
-                            let bb = blk2 * w + (blk1 + j);
-                            let sum = 0.0;
-                            for (let k = 0; k < 32; ++k) {
-                                sum += A[aa] * B[bb];
-                                aa += 1;
-                                bb += w;
-                            }
-                            C[oc] += sum;
-                            oc += 1;
-                        }
-                        oc += w;
-                    }
-                }
-            }
-        }
-
+        const A = tf.readSync(a);
+        const B = tf.readSync(b);
+        squareMatMul(C, A, B, w);
         let msMatMul = (new Date()).getTime() - startMatMul;
         console.log(`  Finish MatMul in ${msMatMul}ms. result is of shape: ${w}x${w}`);
         
