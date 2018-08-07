@@ -20,9 +20,9 @@ export type TensorLike = StrictTensorLike | number | boolean;
 
 //export type BackendTensor = object;
 export interface BackendTensor {
-    shape(): number[];
-    dtype(): DataType;
-    size(): number;
+    readonly shape: number[];
+    readonly dtype: DataType;
+    readonly size: number;
 }
 
 export function isTypedArray(a: any) : boolean {

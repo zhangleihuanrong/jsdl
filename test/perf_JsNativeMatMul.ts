@@ -51,8 +51,8 @@ describe("NativeJsMatMul", function() {
 
         console.log('  Start mat mul............');
         const startMatMul = new Date().getTime();
-        const A = tf.readSync(a);
-        const B = tf.readSync(b);
+        const A = tf.read(a);
+        const B = tf.read(b);
         squareMatMul(C, A, B, w);
         let msMatMul = (new Date()).getTime() - startMatMul;
         console.log(`  Finish MatMul in ${msMatMul}ms. result is of shape: ${w}x${w}`);

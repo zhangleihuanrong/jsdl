@@ -6,9 +6,17 @@ import { TensorManager } from './tensor_manager';
 export interface Backend extends TensorManager{
     //write(t: Tensor, values: StrictTensorLike) : void;
     //read(t: Tensor) : Promise<TypedArray>;
-    readSync(t: Tensor) : TypedArray;
+    read(t: Tensor) : TypedArray;
 
-    conv2d(x: Tensor, filter: Tensor, strides: number | [number, number], padding: number[], dataFormat: 'NHWC' | 'NCHW', dialations: number | [number, number]) : Tensor;
+    conv2d(
+        x: Tensor, 
+        filter: Tensor,
+        strides: number | [number, number], 
+        padding: number[], 
+        dataFormat: 'NHWC' | 'NCHW', 
+        dialations: number | [number, number],
+        groups: number) : Tensor;
+
     reshape(x: Tensor, newShape: number[]) : Tensor;
     transpose(x: Tensor, perm?: number[]) : Tensor;
     matMul(a : Tensor, b: Tensor, transposeA?: boolean, transposeB?: boolean): Tensor;
@@ -24,5 +32,4 @@ export interface Backend extends TensorManager{
     // pad(x: Tensor, paddings: Array<[number, number]>, padValue: number): Tensor;
     tile(x: Tensor, repeats: number[]) : Tensor;
     pick(x: Tensor, indices: number[]) : Tensor;
-
 }

@@ -3,12 +3,7 @@ import * as fs from 'fs';
 import * as tf from '../../src/index';
 import {Tensor} from '../../src/index';
 
-import {iterateNdarray} from '../../src/utils/ndarray_print';
-
-import * as ndarray from 'ndarray';
-
-
-
+import { NDView as NdArray} from '../../src/NdView/ndview';
 
 function loadTensor(pathName: string, shape: number[]) : Tensor {
     const buffer = fs.readFileSync(pathName);
@@ -25,7 +20,7 @@ function loadTensor(pathName: string, shape: number[]) : Tensor {
 function isNumberNotSame(a: number, b: number) : Boolean {
     const aa = Math.abs(a);
     const ab = Math.abs(b);
-    return ((Math.max(aa, ab) >= 1e-26) && (Math.abs(a - b)/Math.max(aa, ab) > 0.001));
+    return ((Math.abs(a - b) >= 1e-4) && (Math.abs(a - b)/(Math.max(aa, ab)+Math.abs(a - b)) > 0.01));
 }
 
 function arraysEqual(a: number[], b: number[]) : boolean {
@@ -48,19 +43,20 @@ function testConv2D(
     strides: [number, number], 
     dilations: [number, number],
     number2string: (number) => string = (x) => x.toString(),
-    lastAxisExclude: [number, number] = [3, -2],
+    lastAxisExclude: [number, number] = null,
+    otherAxisExclude: [number, number] = null
 ) {
     image.name = `image${image.id}`;
-    tf.print(image, number2string, lastAxisExclude);
+    tf.print(image, number2string, lastAxisExclude, otherAxisExclude);
 
     filter.name = `filter${filter.id}`;
-    tf.print(filter, number2string, lastAxisExclude);
+    tf.print(filter, number2string, lastAxisExclude, otherAxisExclude);
         
     goldenResult.name = `GoldConv2DResult${goldenResult.id}`;
-    tf.print(goldenResult, number2string, lastAxisExclude);
-        
+    tf.print(goldenResult, number2string, lastAxisExclude, otherAxisExclude);
+    console.log(`padding:${padding}, strides:${strides}, dilations:${dilations}`);
     let r: Tensor = null;
-    const rounds = 1;
+    const rounds = 3;
     const start =  Date.now();
     for (let rep=0; rep < rounds; ++rep) {
         const itStart =  Date.now();
@@ -71,24 +67,19 @@ function testConv2D(
     
     const millis = Date.now() - start;
     const avgMillis = millis / rounds;
-    
-    r = tf.transpose(r, [0, 3, 1, 2]);
-    r.name = `Conv2dResult${r.id}`;
-    tf.print(r, number2string, lastAxisExclude);
- 
     console.log(`  --Total: ${millis}ms, avg:${avgMillis}ms`);
+    
+    r.name = `Conv2dResult${r.id}`;
+    tf.print(r, number2string, lastAxisExclude, otherAxisExclude);
  
     if (!arraysEqual(goldenResult.shape, r.shape)) {
         throw new Error('Not same shape, gold:' + JSON.stringify(goldenResult.shape) + " .vs. target:" + JSON.stringify(r.shape));
     }
     
-    // TODO: add tensor iteration interface
-    // currently hacked with ndarray
-    const ga: ndarray = goldenResult.data as ndarray;
-    const ra: ndarray = r.data as ndarray;
+    const ga: NdArray = new NdArray(tf.read(goldenResult), goldenResult.shape);
+    const ra: NdArray = new NdArray(tf.read(r), r.shape);
     
-    iterateNdarray(ga, (nda: ndarray, loc) => {
-        const gv = ga.get(...loc);
+    ga.forEach((gv, index, loc) => {
         const rv = ra.get(...loc);
         if (isNumberNotSame(gv, rv)) {
             throw new Error(`not equal @`+ JSON.stringify(loc) + `  gold:${gv}, r:${rv}`);
@@ -155,5 +146,8 @@ testConv2D(
     [3, 3, 3, 3],
     [2, 2],
     [1, 1],
-    (x: number) => x.toFixed(7)
+    (x: number) => x.toFixed(7),
+    [5, -3],
+    [2, -1]
 );
+

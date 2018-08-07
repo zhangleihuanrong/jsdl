@@ -16,11 +16,11 @@ const neg = ENV.engine.backend.neg.bind(ENV.engine.backend);
 const add = ENV.engine.backend.add.bind(ENV.engine.backend);
 const multiply = ENV.engine.backend.multiply.bind(ENV.engine.backend);
 const relu = ENV.engine.backend.relu.bind(ENV.engine.backend);
-const readSync = ENV.engine.backend.readSync.bind(ENV.engine.backend);
 const reshape = ENV.engine.backend.reshape.bind(ENV.engine.backend);
 const conv2d = ENV.engine.backend.conv2d.bind(ENV.engine.backend);
 const tile =  ENV.engine.backend.tile.bind(ENV.engine.backend);
 const pick =  ENV.engine.backend.pick.bind(ENV.engine.backend);
+const read = ENV.engine.backend.read.bind(ENV.engine.backend);
 
 
 // static Tensor methods
@@ -31,7 +31,7 @@ const truncatedNorm = Tensor.truncatedNorm;
 
 export { tensor, randomNorm, randomUniform, truncatedNorm,
     
-        readSync,
+        read,
 
         printTensor as print, 
         

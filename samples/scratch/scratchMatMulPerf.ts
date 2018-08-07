@@ -68,13 +68,13 @@ const sampleBs = new Map<number, Float32Array>();
 for (let w = 32; w <= 2048; w*=2) {
     const startInitA = new Date().getTime();
     const a = tf.randomNorm([w, w], 2.0, 3.0, 'float32', 10000);
-    sampleAs[w] = tf.readSync(a);
+    sampleAs[w] = tf.read(a);
     const msInitA = (new Date()).getTime() - startInitA;
     console.log(`  Finish initialize A[${w}*${w}]  in ${msInitA}ms.`);
 
     const startInitB = new Date().getTime();
     const b = tf.randomNorm([w, w], 1.0, 2.0, 'float32', 20000);
-    sampleBs[w] = tf.readSync(b);
+    sampleBs[w] = tf.read(b);
     const msInitB = (new Date()).getTime() - startInitB;
     console.log(`  Finish initialize B[${w}*${w}] in ${msInitB}ms.`);
 }

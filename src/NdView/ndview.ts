@@ -385,11 +385,11 @@ export class NDView {
 
     private compactData(): NdArrayLike {
         if (this.data == null) {
-            console.log("XXXXX.....XXXXX....need real data...");
-            return null;  // need data
+            throw new Error("XXXXX.....XXXXX....need data to compact...");
         }
         
-        console.log("XXXXX.....XXXXX....compacting data...");
+        // console.log("XXXXX.....XXXXX....compacting data...");
+        // TODO: following is slow, make it fast
         let d: NdArrayLike = null;
         if (Array.isArray(this.data)) {
             d = new Array[this.size];
@@ -463,8 +463,8 @@ export class NDView {
         ASSERT(paddings != null && paddings.length == this.shape.length, "Shape length not matching with padding dimentions");
         ASSERT(paddings.every(v => v != null && v[0] >= 0 && v[1] >= 0), "Padding on axis should all not negative.");
         if (this.gather || this.repeat) {
-            const nt = this.rebuild(); // need real data
-            if (nt == null) return null;
+            const nt = this.rebuild(); 
+            if (nt == null) return null; // need real data
             return new NDView(nt.data, nt.shape, 0, null, 0, null, null, paddings, value);
         }
         
@@ -661,8 +661,8 @@ export class NDView {
     print(
         name: string = '',
         stringifyElem: (any) => string = null, 
-        excludeLastAxis: [number, number] = null,
-        excludeHiAxises: [number, number] = null,
+        excludeLastAxis: [number, number] = [5, -3],
+        excludeHiAxises: [number, number] = [2, -1],
         printline: (line: string) => void = function (line) { console.log(line); },
         newLineAfterName: boolean = true
     ) {

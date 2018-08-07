@@ -82,16 +82,16 @@ export class WebGLTensor implements BackendTensor {
     return this;
   }
 
-  shape(): number[] {
+  get shape(): number[] {
     return this._array.shape;
   }
 
-  dtype(): DataType {
+  get dtype(): DataType {
     return this._dtype;
   }
 
-  size(): number {
-    return this.shape().reduce((m, v) => m * v, 1);
+  get size(): number {
+    return this.shape.reduce((m, v) => m * v, 1);
   }
 };
 
@@ -127,7 +127,7 @@ class WebGLBackend implements Backend {
     delete t.data;
   }
 
-  readSync(x: Tensor): TypedArray {
+  read(x: Tensor): TypedArray {
     const bt = backendTensorOf(x);
 
     // //hack to see texture works or not at all
@@ -163,19 +163,19 @@ class WebGLBackend implements Backend {
     let A = backendTensorOf(a).MoveDataToGpu(this.webgl);
     let B = backendTensorOf(b).MoveDataToGpu(this.webgl);
 
-    if (transposeA == true && A.shape().length > 1) A = A.transpose();
-    if (transposeB == true && B.shape().length > 1) B = B.transpose();
+    if (transposeA == true && A.shape.length > 1) A = A.transpose();
+    if (transposeB == true && B.shape.length > 1) B = B.transpose();
 
-    if (A.shape().length == 1) A = A.expandDim(0);
-    if (B.shape().length == 1) B = B.expandDim(1);
+    if (A.shape.length == 1) A = A.expandDim(0);
+    if (B.shape.length == 1) B = B.expandDim(1);
 
-    const shapeAMul = A.shape().slice(A.shape().length - 2);
-    const shapeBMul = B.shape().slice(B.shape().length - 2);
+    const shapeAMul = A.shape.slice(A.shape.length - 2);
+    const shapeBMul = B.shape.slice(B.shape.length - 2);
     ASSERT(shapeAMul[1] == shapeBMul[0], `shape[${shapeAMul}] can not matMul with shape[${shapeBMul}]`);
     const commonDim = shapeAMul[1];
 
-    const shapeAPrefix = A.shape().slice(0, A.shape.length - 2);
-    const shapeBPrefix = B.shape().slice(0, B.shape.length - 2);
+    const shapeAPrefix = A.shape.slice(0, A.shape.length - 2);
+    const shapeBPrefix = B.shape.slice(0, B.shape.length - 2);
     if (shapeAPrefix.length > 0) {
       ASSERT(canBroadcastTo(shapeAPrefix, shapeBPrefix), "Can not broadcast b to a");
       const unsq = getUnsqueezeAxisForBroadcast(shapeAPrefix, shapeBPrefix);
@@ -262,7 +262,8 @@ void main() {
   conv2d(
     x: Tensor, filter: Tensor, strides: number | [number, number],
     padding: number[], dataFormat: 'NHWC' | 'NCHW',
-    dialations: number | [number, number]): Tensor {
+    dialations: number | [number, number],
+    groups: number = 1): Tensor {
 
       throw new Error('Method not implemented.');
   }

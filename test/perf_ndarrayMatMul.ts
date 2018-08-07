@@ -9,13 +9,13 @@ describe("_NdArrayMatMul", function() {
     for (let w = 32; w <= 1024; w*=2) {
         const startInitA = new Date().getTime();
         const a = tf.randomNorm([w, w], 2.0, 3.0, 'float32', 10000);
-        const nda = ndarray(tf.readSync(a), [w, w]);
+        const nda = ndarray(tf.read(a), [w, w]);
         const msInitA = (new Date()).getTime() - startInitA;
         console.log(`  Finish initialize A[${w}*${w}]  in ${msInitA}ms.`);
     
         const startInitB = new Date().getTime();
         const b = tf.randomNorm([w, w], 1.0, 2.0, 'float32', 20000);
-        const ndb = ndarray(tf.readSync(b), [w, w]);
+        const ndb = ndarray(tf.read(b), [w, w]);
         const msInitB = (new Date()).getTime() - startInitB;
         console.log(`  Finish initialize B[${w}*${w}] in ${msInitB}ms.`);
         

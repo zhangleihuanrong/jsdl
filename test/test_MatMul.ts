@@ -27,7 +27,7 @@ describe("Tensor MatMul", function() {
     tf.print(gold);
 
     assert(areTwoArrayLikeEqual(mul.shape, gold.shape), "result shape error!");
-    assert(areTwoArrayLikeEqual(tf.readSync(gold), tf.readSync(mul)), "result data error!");
+    assert(areTwoArrayLikeEqual(tf.read(gold), tf.read(mul)), "result data error!");
   });
 
   it("a[5x3].transpose.transpose.reshape([3x5]) * b[5x2]", function() {
@@ -58,7 +58,7 @@ describe("Tensor MatMul", function() {
     tf.print(gold);
 
     assert(areTwoArrayLikeEqual(mul.shape, gold.shape), "result shape error!");
-    assert(areTwoArrayLikeEqual(tf.readSync(gold), tf.readSync(mul)), "result data error!");
+    assert(areTwoArrayLikeEqual(tf.read(gold), tf.read(mul)), "result data error!");
   });
 
   it("a[1x3x5].tile(2,1,1) * b[5x2]", function() {
@@ -81,7 +81,7 @@ describe("Tensor MatMul", function() {
     tf.print(gold);
 
     assert(areTwoArrayLikeEqual(mul.shape, gold.shape), "result shape error!");
-    assert(areTwoArrayLikeEqual(tf.readSync(gold), tf.readSync(mul)), "result data error!");
+    assert(areTwoArrayLikeEqual(tf.read(gold), tf.read(mul)), "result data error!");
   });
 
   it("a[1024*1024] * b[1024x1024]", function() {

@@ -55,8 +55,8 @@
         {
             "type": "node",
             "request": "launch",
-            "name": "Launch Program",
-            "program": "${workspaceFolder}/dist/samples/scratch/scratch",
+            "name": "scratchConv2D",
+            "program": "${workspaceFolder}/dist/samples/scratch/scratchConv2D",
             "outFiles": [
                 "${workspaceFolder}/dist/**/*.js"
             ]

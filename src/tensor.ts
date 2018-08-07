@@ -1,10 +1,9 @@
 import { DataType, Shape, BackendTensor, StrictTensorLike, getShape, TypedArray, toTypedArray, isTypeArrayFor, createTypeArrayForShape } from './types';
 import { ENV } from './environments';
 
-import { printNdarray } from './utils/ndarray_print';
 import { MPRandGauss } from './utils/rand';
 
-import * as ndarray from 'ndarray';
+import {NDView as NdArray} from './NdView/ndview';
 
 export class Tensor {
     private static sNextId: number = 0;
@@ -122,7 +121,7 @@ export class Tensor {
             if (indices.shape.length != 1 || indices.dtype != 'int32') {
                 throw new Error(`indices should be of 1D of int32 rather than ${indices.shape.length}D of ${indices.dtype}!`);
             } 
-            indices = ENV.engine.backend.readSync(indices) as Int32Array;
+            indices = ENV.engine.backend.read(indices) as Int32Array;
         }
         if (indices instanceof Int32Array) {
             indices = Array.prototype.slice.call(indices) as number[];
@@ -153,15 +152,15 @@ export class Tensor {
     }
 
     get shape() : Shape {
-        return this.data.shape();
+        return this.data.shape;
     }
 
     get dtype(): DataType {
-        return this.data.dtype();
+        return this.data.dtype;
     }
 
     get size() : number {
-        return this.data.size();
+        return this.data.size;
     }
 
     get rank() : number {
@@ -172,9 +171,9 @@ export class Tensor {
           excludeLastAxis: [number, number] = null,
           excludeHiAxises: [number, number] = null) {
         if (this.data) {
-            const ta = ENV.engine.backend.readSync(this);
-            const ndx = ndarray(ta, this.shape);
-            printNdarray(ndx, this.name, number2string, excludeLastAxis, excludeHiAxises);
+            const ta = ENV.engine.backend.read(this);
+            const ndx = new NdArray(ta, this.shape);
+            ndx.print(this.name, number2string, excludeLastAxis, excludeHiAxises);
         }
         else {
             console.log(`${this.name} -- TensorId:${this.id} --:  contains no data`)
