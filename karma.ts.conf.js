@@ -21,7 +21,8 @@ module.exports = function (config) {
         // list of files / patterns to load in the browser
         files: [
             'src/**/*.ts',
-            'test/test_conv2D.ts'
+            'test/test_conv2D.ts',
+            { pattern: 'testdata/*.buf', watched: false, included: false, served: true, nocache: false }
         ],
 
         // list of files / patterns to exclude

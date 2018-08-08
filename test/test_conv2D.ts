@@ -1,3 +1,27 @@
+import axios from 'axios';
+
+async function loadTensor(url: string, shape: number[]) : Promise<Tensor> {
+    try {
+        const response = await axios.request({
+            responseType: 'arraybuffer',
+            url: url,
+            method: 'get',
+            headers: { 'Content-Type': 'application/octet-stream' },
+        });
+        const buffer = response.data as ArrayBuffer;
+        const flen = buffer.byteLength / 4;
+        const ta = new Float32Array(flen);
+        const dv = new DataView(buffer);
+        for (let i = 0; i < flen; ++i) {
+            ta[i] = dv.getFloat32(i * 4, true);
+        }
+        return tf.tensor(ta, shape);
+    }
+    catch(e) {
+        throw e;
+    }
+}
+
 
 import { assert } from 'chai';
 
@@ -129,6 +153,26 @@ describe("Conv2D", function() {
             [2, 2],
             [1, 1]
         );
+    });
+
+
+    it("x[1x3x224x224, k[64x3x7x7], pad[3,3,3,3], strides=[2,2]", async function() {
+        const pX = loadTensor("./testdata/imageInput.buf", [1, 3, 224, 224]);
+        const pF = loadTensor("./testdata/filter.buf", [64, 3, 7, 7]);
+        const pGold = loadTensor("./testdata/convResult.buf", [1, 64, 112, 112]);
+
+        Promise.all([pX, pF, pGold])
+            .then((tensors: Tensor[]) => {
+                testConv2D(
+                    tensors[0], tensors[1], tensors[2],
+                    [3, 3, 3, 3],
+                    [2, 2],
+                    [1, 1],
+                    (x: number) => x.toFixed(7),
+                    [5, -3],
+                    [2, -1]
+                );
+            });
     });
 });
 
