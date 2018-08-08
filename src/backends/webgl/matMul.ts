@@ -84,8 +84,12 @@ void main() {
     outColor = vec4(sum, 0.0, 0.0, 0.0);
 }
 `;
-        console.log(code);
+ 
+        //console.log(code);
+        const startCompile = new Date().getTime();
         const program = this.webgl.compileProgram(code);
+        let msCompile = (new Date()).getTime() - startCompile;
+        console.log(`>>>>>>>>Compile glsl program cost ${msCompile}ms<<<<<<<<`);
 
         this.webgl.runProgram(
             program,

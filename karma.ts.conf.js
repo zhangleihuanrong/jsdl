@@ -25,6 +25,10 @@ module.exports = function (config) {
             { pattern: 'testdata/*.buf', watched: false, included: false, served: true, nocache: false }
         ],
 
+        proxies: {
+            "/testdata/": "/base/testdata/"
+        },
+
         // list of files / patterns to exclude
         exclude: [],
 
@@ -84,5 +88,5 @@ module.exports = function (config) {
         // Concurrency level
         // how many browser should be started simultaneous
         concurrency: Infinity
-    })
+    });
 }

@@ -1,6 +1,9 @@
 import { assert } from 'chai';
 
-import * as tf from '../src';
+import { ENV } from '../src/environments';
+//ENV.preferBackend("Backend_JSCPU");
+
+import * as tf from '../src/index';
 
 function areTwoArrayLikeEqual<T extends number[] | Float32Array | Int32Array | Uint8Array>(a: T, b:T) {
   if (a.length !== b.length) return false;
@@ -12,6 +15,7 @@ function areTwoArrayLikeEqual<T extends number[] | Float32Array | Int32Array | U
 
 describe("Tensor MatMul", function() {
   it("a[3x5] * b[5x2]", function() {
+    console.log(`===========Using backend: ${ENV.getCurrentBackendName()} ============`);
     const a = tf.tensor([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5], [3, 5]);
     a.name = 'a_3x5';
     tf.print(a);
@@ -31,6 +35,7 @@ describe("Tensor MatMul", function() {
   });
 
   it("a[5x3].transpose.transpose.reshape([3x5]) * b[5x2]", function() {
+    console.log(`===========Using backend: ${ENV.getCurrentBackendName()} ============`);
     let a = tf.tensor([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5], [5, 3]);
     a.name = 'a_5x3';
     tf.print(a);
@@ -62,6 +67,7 @@ describe("Tensor MatMul", function() {
   });
 
   it("a[1x3x5].tile(2,1,1) * b[5x2]", function() {
+    console.log(`===========Using backend: ${ENV.getCurrentBackendName()} ============`);
     let a = tf.tensor([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5], [1, 3, 5]);
     a = tf.tile(a, [2, 1, 1]);
     a.name = 'a_Tile_2x3x5';
@@ -84,18 +90,17 @@ describe("Tensor MatMul", function() {
     assert(areTwoArrayLikeEqual(tf.read(gold), tf.read(mul)), "result data error!");
   });
 
-  it("a[1024*1024] * b[1024x1024]", function() {
+  it("a[2048*2048] * b[2048x2048]", function() {
+    console.log(`===========Using backend: ${ENV.getCurrentBackendName()} ============`);
     const startInitA = new Date().getTime();
     let a = tf.randomNorm([2048, 2048], 2.0, 3.0, 'float32', 10000);
     const msInitA = (new Date()).getTime() - startInitA;
     console.log(`  Finish initialize A 2048 in ${msInitA}ms.`);
-    //tf.print(a, null, [3, 2], [3, 2]);
 
     const startInitB = new Date().getTime();
     let b = tf.randomNorm([2048, 2048], 1.0, 2.0, 'float32', 20000);
     let msInitB = (new Date()).getTime() - startInitB;
     console.log(`  Finish initialize B 2048 in ${msInitB}ms.`);
-    //tf.print(b, null, [3, 2], [3, 2]);
     
     const startMatMul = new Date().getTime();
     console.log('start mat mul............');
@@ -105,5 +110,4 @@ describe("Tensor MatMul", function() {
 
     assert(true, "");
   }).timeout(200000);
-
 });

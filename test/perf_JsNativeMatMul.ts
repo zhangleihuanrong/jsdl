@@ -32,7 +32,7 @@ export function squareMatMul(C: Float32Array, A: Float32Array, B: Float32Array, 
 }
 
 describe("NativeJsMatMul", function() {
-    for (let w = 32; w <= 1024; w*=2) {
+    for (let w = 32; w <= 2048; w*=2) {
         const startInitA = new Date().getTime();
         let a = tf.randomNorm([w, w], 2.0, 3.0, 'float32', 10000);
         const msInitA = (new Date()).getTime() - startInitA;

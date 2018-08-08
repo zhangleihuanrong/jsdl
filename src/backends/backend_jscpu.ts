@@ -106,6 +106,7 @@ class JsNdarrayBackend implements Backend {
         const C = new NdArray(ta, shapeC);
 
         if (A.isCoreOnly() && B.isCoreOnly() && A.shape.length == 2) {
+            console.log("......Using ndarray_gemm operaters......");
             const ndA = nd(A.data, A.shape);
             const ndB = nd(B.data, B.shape);
             const ndC = nd(C.data, C.shape);

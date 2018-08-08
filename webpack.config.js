@@ -4,8 +4,8 @@ const glob = require('glob');
 module.exports = {
     entry: {
         jsdl: './src/index.ts',
-        test: glob.sync('./test/test_*.ts'),
-        demo:  './demos/sand.ts',
+        test: './test/test_MatMul.ts', //glob.sync('./test/test_conv2D.ts'),
+        demo:  './samples/scratch/scratch.ts',
     },
     resolve: {
         extensions: [".tsx", ".ts", ".js"]

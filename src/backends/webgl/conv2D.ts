@@ -101,7 +101,10 @@ void main() {
 `;
 
         //console.log(code);
+        const startCompile = new Date().getTime();
         const program = this.webgl.compileProgram(code);
+        let msCompile = (new Date()).getTime() - startCompile;
+        console.log(`>>>>>>>>Compile glsl program cost ${msCompile}ms<<<<<<<<`);
 
         const textures = [{ name: 'X', texture: X._texture }, { name: 'K', texture: K._texture }];
         if (Bias) textures.push({ name: 'Bias', texture: Bias._texture });

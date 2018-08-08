@@ -1,34 +1,34 @@
 import axios from 'axios';
+import { assert } from 'chai';
 
-async function loadTensor(url: string, shape: number[]) : Promise<Tensor> {
-    try {
-        const response = await axios.request({
+import { ENV } from '../src/environments';
+//ENV.preferBackend("Backend_JSCPU");
+
+import { NDView as NdArray} from '../src/NdView/ndview';
+import * as tf from '../src/index';
+import {Tensor} from '../src/index';
+
+function loadTensor(url: string, shape: number[]) : Promise<Tensor> {
+    return new Promise((resolve, reject) => {
+        axios.request({
             responseType: 'arraybuffer',
             url: url,
             method: 'get',
             headers: { 'Content-Type': 'application/octet-stream' },
+        }).then(response => {
+            const buffer = response.data as ArrayBuffer;
+            const flen = buffer.byteLength / 4;
+            const ta = new Float32Array(flen);
+            const dv = new DataView(buffer);
+            for (let i = 0; i < flen; ++i) {
+                ta[i] = dv.getFloat32(i * 4, true);
+            }
+            resolve(tf.tensor(ta, shape));
+        }).catch(err => {
+            reject(err);
         });
-        const buffer = response.data as ArrayBuffer;
-        const flen = buffer.byteLength / 4;
-        const ta = new Float32Array(flen);
-        const dv = new DataView(buffer);
-        for (let i = 0; i < flen; ++i) {
-            ta[i] = dv.getFloat32(i * 4, true);
-        }
-        return tf.tensor(ta, shape);
-    }
-    catch(e) {
-        throw e;
-    }
+    });
 }
-
-
-import { assert } from 'chai';
-
-import * as tf from '../src/index';
-import {Tensor} from '../src/index';
-
-import { NDView as NdArray} from '../src/NdView/ndview';
 
 function isNumberNotSame(a: number, b: number) : Boolean {
     const aa = Math.abs(a);
@@ -60,13 +60,13 @@ function testConv2D(
     otherAxisExclude: [number, number] = null
 ) {
     image.name = `image${image.id}`;
-    tf.print(image, number2string, lastAxisExclude, otherAxisExclude);
+    //tf.print(image, number2string, lastAxisExclude, otherAxisExclude);
 
     filter.name = `filter${filter.id}`;
-    tf.print(filter, number2string, lastAxisExclude, otherAxisExclude);
+    //tf.print(filter, number2string, lastAxisExclude, otherAxisExclude);
         
     goldenResult.name = `GoldConv2DResult${goldenResult.id}`;
-    tf.print(goldenResult, number2string, lastAxisExclude, otherAxisExclude);
+    //tf.print(goldenResult, number2string, lastAxisExclude, otherAxisExclude);
     console.log(`padding:${padding}, strides:${strides}, dilations:${dilations}`);
     let r: Tensor = null;
     const rounds = 3;
@@ -74,16 +74,16 @@ function testConv2D(
     for (let rep=0; rep < rounds; ++rep) {
         const itStart =  Date.now();
         r = tf.conv2d(image, filter, strides, padding, 'NCHW', dilations);
+        const ta = tf.read(r);
         const millis = Date.now() - itStart;
-        console.log(`  --${rep} iteration: ${millis}ms`);
+        console.log(`  --${rep} iteration: ${millis}ms, result elements: ${ta.length}`);
     }
-    
     const millis = Date.now() - start;
     const avgMillis = millis / rounds;
     console.log(`  --Total: ${millis}ms, avg:${avgMillis}ms`);
     
     r.name = `Conv2dResult${r.id}`;
-    tf.print(r, number2string, lastAxisExclude, otherAxisExclude);
+    //tf.print(r, number2string, lastAxisExclude, otherAxisExclude);
  
     if (!arraysEqual(goldenResult.shape, r.shape)) {
         throw new Error('Not same shape, gold:' + JSON.stringify(goldenResult.shape) + " .vs. target:" + JSON.stringify(r.shape));
@@ -134,6 +134,7 @@ const goldb = [ // for padding [1,1,1,1]
 
 describe("Conv2D", function() {
     it("x[1x1x4x4, k[2x1x2x2], nopadding, strides=[2,2]", function() {
+        console.log(`===========Using backend: ${ENV.getCurrentBackendName()} ============`);
         testConv2D(
             tf.tensor(ima, [1, 1, 4, 4]),
             tf.tensor(flta, [2, 1, 2, 2]),
@@ -145,6 +146,7 @@ describe("Conv2D", function() {
     });
 
     it("x[1x1x4x4, k[2x1x2x2], pad[1,1,1,1], strides=[2,2]", function() {
+        console.log(`===========Using backend: ${ENV.getCurrentBackendName()} ============`);
         testConv2D(
             tf.tensor(ima, [1, 1, 4, 4]),
             tf.tensor(flta, [2, 1, 2, 2]),
@@ -157,22 +159,24 @@ describe("Conv2D", function() {
 
 
     it("x[1x3x224x224, k[64x3x7x7], pad[3,3,3,3], strides=[2,2]", async function() {
-        const pX = loadTensor("./testdata/imageInput.buf", [1, 3, 224, 224]);
-        const pF = loadTensor("./testdata/filter.buf", [64, 3, 7, 7]);
-        const pGold = loadTensor("./testdata/convResult.buf", [1, 64, 112, 112]);
+        console.log(`===========Using backend: ${ENV.getCurrentBackendName()} ============`);
+        console.log('Downloading imageInput.buf...');
+        const pX = await loadTensor("./testdata/imageInput.buf", [1, 3, 224, 224]);
+        console.log('Downloading filter.buf...');
+        const pF = await loadTensor("./testdata/filter.buf", [64, 3, 7, 7]);
+        console.log('Downloading goldresult...');
+        const pGold = await loadTensor("./testdata/convResult.buf", [1, 64, 112, 112]);
+        console.log('start n-time conv2d...');
 
-        Promise.all([pX, pF, pGold])
-            .then((tensors: Tensor[]) => {
-                testConv2D(
-                    tensors[0], tensors[1], tensors[2],
-                    [3, 3, 3, 3],
-                    [2, 2],
-                    [1, 1],
-                    (x: number) => x.toFixed(7),
-                    [5, -3],
-                    [2, -1]
-                );
-            });
-    });
+        testConv2D(
+            pX, pF, pGold,
+            [3, 3, 3, 3],
+            [2, 2],
+            [1, 1],
+            (x: number) => x.toFixed(7),
+            [5, -3],
+            [2, -1]
+        );
+    }).timeout(100000);
 });
 

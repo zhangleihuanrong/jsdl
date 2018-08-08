@@ -5,11 +5,23 @@ export class Environment {
     private backendRegistry : { [name: string ] : {backend: Backend, score: number} } = {};
     private currentBackendName: string = '';
     private currentEngine: TensorEngine = null;
+    private preferedName: string = '';
 
     constructor() {
     }
 
+    preferBackend(name: string) {
+        this.preferedName = name;
+    }
+
+    getCurrentBackendName() : string {
+        return this.currentBackendName;
+    }
+
     registerBackend(name: string, backend: Backend, score: number = 1) {
+        if (name === this.preferedName) {
+            score = 10000;
+        }
         if (name in this.backendRegistry) {
             console.warn(`Tensor backend '${name}' already registered.`)
         }
@@ -48,6 +60,7 @@ export class Environment {
     }
 
     private useBackend(name: string) {
+        console.log(`==============Using backend: ${name} ================`);
         this.currentBackendName = name;
         const backend = this.findBackend(name);
         this.currentEngine = new TensorEngine(backend);

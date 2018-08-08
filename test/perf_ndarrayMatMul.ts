@@ -6,7 +6,7 @@ import * as nda_gemm from 'ndarray-gemm';
 
 describe("_NdArrayMatMul", function() {
 
-    for (let w = 32; w <= 1024; w*=2) {
+    for (let w = 32; w <= 2048; w*=2) {
         const startInitA = new Date().getTime();
         const a = tf.randomNorm([w, w], 2.0, 3.0, 'float32', 10000);
         const nda = ndarray(tf.read(a), [w, w]);
