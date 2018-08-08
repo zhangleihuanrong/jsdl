@@ -226,101 +226,15 @@ class JsNdarrayBackend implements Backend {
     }
 
     tile(x: Tensor, repeats: number[]): Tensor {
-        return null;
+        ASSERT(repeats.length == x.shape.length && repeats.every(v => v >= 1), "wrong repreats");
+        let bax = backendTensorOf(x)._array;
+        bax = bax.tile(repeats);
+        return Tensor.fromBackend(new NdArrayTensor(bax, x.dtype));
     }
 
     pick(x: Tensor, indices: number[]): Tensor {
         return null;
     }
-
-    // conv2d(
-    //     x: Tensor,
-    //     filter: Tensor,
-    //     strides: number | [number, number],
-    //     padding: number[],
-    //     dataFormat: 'NHWC' | 'NCHW',
-    //     dilations: number | [number, number] = 1,
-    //     groups: number = 1): Tensor {
-
-    //     if (!(Array.isArray(strides))) strides = [strides as number, strides as number];
-    //     if (!(Array.isArray(dilations))) dilations = [dilations as number, dilations as number];
-
-    //     let ndvx = NdArrayOf(x);  // 4d tensor, NHWC or NCHW
-    //     let ndvk = NdArrayOf(filter); //[H, W, in, out] or [out, in, H, W]
-
-    //     if (dataFormat == 'NCHW') {
-    //         ndvx = ndvx.transpose([0, 2, 3, 1]);
-    //         ndvk = ndvk.transpose([2, 3, 1, 0]);
-    //     }
-
-    //     ndvx = ndvx.pad([[0, 0], [padding[0], padding[2]], [padding[1], padding[3]], [0, 0]]);
-    //     ndvx = ndvx.rebuild();
-    //     ndvk = ndvk.rebuild();
-
-    //     const ndx = nd(ndvx.data, ndvx.shape);
-    //     const ndk = nd(ndvk.data, ndvk.shape);
-
-    //     // calc output shape
-    //     const [batchSize, inputRows, inputCols, inputChannels] = [ndx.shape[0], ndx.shape[1], ndx.shape[2], ndx.shape[3]];
-    //     const [kernelRows, kernelCols, kernelIn, outChannels] = [ndk.shape[0], ndk.shape[1], ndk.shape[2], ndk.shape[3]];
-    //     ASSERT(inputChannels == kernelIn * groups, "intput channel do not match kernnels*groups");
-    //     ASSERT(Math.floor(outChannels / groups) == outChannels / groups, "group can not equal devide outputChannels");
-
-    //     const dilateKernelRows = kernelRows + (kernelRows - 1) * (dilations[0] - 1);
-    //     const dilateKernelCols = kernelCols + (kernelCols - 1) * (dilations[1] - 1);
-    //     const outRows = Math.floor((inputRows - dilateKernelRows + strides[0]) / strides[0]);
-    //     const outCols = Math.floor((inputCols - dilateKernelCols + strides[1]) / strides[1]);
-    //     const outSize = batchSize * outRows * outCols * outChannels;
-    //     const resultTypedArray = new Float32Array(outSize);
-
-    //     const sizeOfPatch = kernelRows * kernelCols * kernelIn;
-    //     const patch = nd(new Float32Array(sizeOfPatch), [kernelRows, kernelCols, kernelIn]);
-
-    //     const outChannelsPerGroup = outChannels / groups;
-    //     const ndr = nd(resultTypedArray, [batchSize, outRows, outCols, outChannels]);
-    //     const ndf = nd(new Float32Array(sizeOfPatch * outChannelsPerGroup), [sizeOfPatch, outChannelsPerGroup]);
-    //     const pixelResult = nd(new Float32Array(outChannelsPerGroup), [1, outChannelsPerGroup]);
-
-    //     for (let b = 0; b < batchSize; ++b) {
-    //         let singleImage = ndx.pick(b, null, null, null);
-    //         let singleResultOffset = b * (outRows * outCols * outChannels);
-
-    //         for (let g = 0; g < groups; ++g) {
-    //             for (let yC = g * outChannelsPerGroup, yCInGroup = 0; yCInGroup < outChannelsPerGroup; ++yCInGroup, ++yC) {
-    //                 nd_ops.assign(patch, ndk.pick(null, null, null, yC));
-    //                 const reshaped = nd(patch.data, [sizeOfPatch]);
-    //                 nd_ops.assign(ndf.pick(null, yCInGroup), reshaped);
-    //             }
-
-    //             let offsetY = singleResultOffset + g * outChannelsPerGroup;
-    //             for (let yH = 0; yH < outRows; ++yH) {
-    //                 let xH = yH * strides[0];
-    //                 for (let yW = 0; yW < outCols; ++yW) {
-    //                     let xW = yW * strides[1];
-
-    //                     let patchView = singleImage
-    //                         .hi(xH + dilateKernelRows, xW + dilateKernelCols, (g + 1) * kernelIn)
-    //                         .lo(xH, xW, g * kernelIn)
-    //                         .step(dilations[0], dilations[1], 1);
-
-    //                     nd_ops.assign(patch, patchView);
-    //                     const patchInRow = nd(patch.data, [1, sizeOfPatch]);
-    //                     nd_gemm(pixelResult, patchInRow, ndf);
-    //                     ndr.data.set(pixelResult.data, offsetY);
-    //                     offsetY += outChannels;
-    //                 }
-    //             }
-    //         }
-    //     }
-
-    //     // [N, H, W, C] format
-    //     let ndvr = new NdArray(resultTypedArray, [batchSize, outRows, outCols, outChannels]);
-    //     if (dataFormat == "NCHW") {
-    //         ndvr = ndvr.transpose([0, 3, 1, 2]);
-    //     }
-    //     const r = Tensor.fromBackend(new NdArrayTensor(ndvr, 'float32'));
-    //     return r;
-    // }
 
     nd_pad(x: nd, paddings: [number, number][], padVal: number = 0): nd {
         //TODO: check parameters
@@ -345,8 +259,9 @@ class JsNdarrayBackend implements Backend {
         strides: number | [number, number],
         padding: number[],
         dataFormat: 'NHWC' | 'NCHW',
-        dilations: number | [number, number] = 1,
-        groups: number = 1): Tensor {
+        dilations: number | [number, number] = [1, 1],
+        groups: number = 1,
+        bias: Tensor = null): Tensor {
 
         if (!(strides instanceof Array)) strides = [strides as number, strides as number];
         if (!(dilations instanceof Array)) dilations = [dilations as number, dilations as number];
@@ -366,6 +281,7 @@ class JsNdarrayBackend implements Backend {
         const [kernelRows, kernelCols, kernelIn, outChannels] = [ndk.shape[0], ndk.shape[1], ndk.shape[2], ndk.shape[3]];
         ASSERT(inputChannels == kernelIn * groups, "intput channel do not match kernnels*groups");
         ASSERT(Math.floor(outChannels / groups) == outChannels / groups, "group can not equal devide outputChannels");
+        if (bias) ASSERT(bias.shape.length == 1 && bias.shape[0] == outChannels, "bias shape are bad!")
 
         const dilateKernelRows = kernelRows + (kernelRows - 1) * (dilations[0] - 1);
         const dilateKernelCols = kernelCols + (kernelCols - 1) * (dilations[1] - 1);
@@ -380,6 +296,7 @@ class JsNdarrayBackend implements Backend {
         const outChannelsPerGroup = outChannels / groups;
         const ndr = nd(resultTypedArray, [batchSize, outRows, outCols, outChannels]);
         const ndf = nd(new Float32Array(sizeOfPatch * outChannelsPerGroup), [sizeOfPatch, outChannelsPerGroup]);
+        const ndb = (bias) ? nd(NdArrayOf(bias).data, bias.shape) : null;
         const pixelResult = nd(new Float32Array(outChannelsPerGroup), [1, outChannelsPerGroup]);
 
         for (let b = 0; b < batchSize; ++b) {
@@ -409,6 +326,15 @@ class JsNdarrayBackend implements Backend {
                         nd_gemm(pixelResult, patchInRow, ndf);
                         ndr.data.set(pixelResult.data, offsetY);
                         offsetY += outChannels;
+                    }
+                }
+            }
+
+            if (ndb) {
+                for (let yH = 0; yH < outRows; ++yH) {
+                    for (let yW = 0; yW < outCols; ++yW) {
+                        const ocVec = ndr.pick(b, yH, yW, null);
+                        nd_ops.addseq(ocVec, ndb);
                     }
                 }
             }

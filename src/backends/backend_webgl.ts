@@ -5,8 +5,9 @@ import { Tensor } from '../tensor';
 import { BackendTensor, DataType, Shape, TypedArray } from '../types';
 import { assert as ASSERT } from '../utils/gadget';
 import { WebGL2Driver } from './webgl/webgl2';
-import { CoordinateMapping } from './webgl/coord2D';
-import { canBroadcastTo, getUnsqueezeAxisForBroadcast, getUnsqueezedShapeForBroadcast, getBroadcastRepeats } from '../utils/shapeTools';
+import { WebGlProgramMatMul } from './webgl/matMul';
+import { WebGlProgramConv2d } from './webgl/conv2D';
+import { WebGlProgramPad } from './webgl/padding';
 
 export class WebGLTensor implements BackendTensor {
   _dtype: DataType;
@@ -74,12 +75,16 @@ export class WebGLTensor implements BackendTensor {
     return new WebGLTensor(ndarr, this._dtype, this._texture, this._texShape);
   }
 
-  DumpDataFromGPU(webgl: WebGL2Driver): WebGLTensor {
-    if (!this._array.data) {
+  // This read array in original layout.
+  DumpDataFromGPU(webgl: WebGL2Driver): TypedArray {
       ASSERT(this._texture != null, "GPU data not exists!");
-      this._array.data = webgl.DumpTexture(this._texture, this._texShape, this._array.dataLen, this._dtype);
-    }
-    return this;
+      return webgl.DumpTexture(this._texture, this._texShape, this._array.dataLen, this._dtype);
+  }
+
+  // This read array in new layout, i.e., only coreShape/coreStride. Other fields are 0 or null or default.
+  ReadFromGPU(webgl: WebGL2Driver): TypedArray {
+    // TODO:
+    return null;
   }
 
   get shape(): number[] {
@@ -97,7 +102,7 @@ export class WebGLTensor implements BackendTensor {
 
 
 function backendTensorOf(t: Tensor): WebGLTensor {
-  return (t.data) as WebGLTensor;
+  return (t)? (t.data as WebGLTensor) : null;
 }
 
 
@@ -114,6 +119,9 @@ class WebGLBackend implements Backend {
     if (!(backendTensor instanceof WebGLTensor)) {
       throw new Error('Not dealing with my own backend tensor!')
     }
+    if (backendTensor._array.data != null) {
+      backendTensor.MoveDataToGpu(this.webgl);
+    }
     t.data = backendTensor;
   }
 
@@ -129,18 +137,11 @@ class WebGLBackend implements Backend {
 
   read(x: Tensor): TypedArray {
     const bt = backendTensorOf(x);
+    const ba = bt._array;
 
-    // //hack to see texture works or not at all
-    // if (bt._array.data != null && bt._texture == null) {
-    //   bt.MoveDataToGpu(this.webgl);
-    // }
-
-    bt.DumpDataFromGPU(this.webgl);
-    let ndx = bt._array;
-    if (ndx) {
-      return ndx.rebuild().data as TypedArray;
-    }
-    return null;
+    const ta = bt.DumpDataFromGPU(this.webgl);
+    let ndx = new NdArray(ta, ba.coreShape, ba.dataLen, ba.coreStride, ba.coreOffset, ba.gather, ba.repeat, ba.padding, ba.paddingValue);
+    return ndx.rebuild().data as TypedArray;
   }
 
   transpose(x: Tensor, perm?: number[]): Tensor {
@@ -163,69 +164,8 @@ class WebGLBackend implements Backend {
     let A = backendTensorOf(a).MoveDataToGpu(this.webgl);
     let B = backendTensorOf(b).MoveDataToGpu(this.webgl);
 
-    if (transposeA == true && A.shape.length > 1) A = A.transpose();
-    if (transposeB == true && B.shape.length > 1) B = B.transpose();
-
-    if (A.shape.length == 1) A = A.expandDim(0);
-    if (B.shape.length == 1) B = B.expandDim(1);
-
-    const shapeAMul = A.shape.slice(A.shape.length - 2);
-    const shapeBMul = B.shape.slice(B.shape.length - 2);
-    ASSERT(shapeAMul[1] == shapeBMul[0], `shape[${shapeAMul}] can not matMul with shape[${shapeBMul}]`);
-    const commonDim = shapeAMul[1];
-
-    const shapeAPrefix = A.shape.slice(0, A.shape.length - 2);
-    const shapeBPrefix = B.shape.slice(0, B.shape.length - 2);
-    if (shapeAPrefix.length > 0) {
-      ASSERT(canBroadcastTo(shapeAPrefix, shapeBPrefix), "Can not broadcast b to a");
-      const unsq = getUnsqueezeAxisForBroadcast(shapeAPrefix, shapeBPrefix);
-      if (unsq) B = B.unsqueeze(unsq);
-      const shapeBExpanded = getUnsqueezedShapeForBroadcast(shapeAPrefix, shapeBPrefix);
-      const repeats = getBroadcastRepeats(shapeAPrefix, shapeBExpanded);
-      if (repeats) B = B.tile(repeats.concat(1, 1));
-    }
-
-    const shapeC = shapeAPrefix.concat(shapeAMul[0], shapeBMul[1]);
-    const rankC = shapeC.length;
-    const C = new WebGLTensor(new NdArray(null, shapeC)).PrepareGpuData(this.webgl);
-
-    const code = `#version 300 es
-precision highp float;
-precision highp int;
-
-in vec2 outTex;
-uniform sampler2D A;
-uniform sampler2D B;
-out vec4 outColor;
-
-${CoordinateMapping.glslGet(A, 'A')}
-
-${CoordinateMapping.glslGet(B, 'B')}
- 
-void main() {
-  ${CoordinateMapping.snippetLogicFormST(C, 'C', 'idx_', 'outTex')}
-  
-  float sum = 0.0;
-  for (int k = 0; k < ${commonDim}; ++k) {  // length of the common axis
-    float a = getA(${CoordinateMapping.argList(rankC, 'idx_', [rankC-1, 'k'])});
-    float b = getB(${CoordinateMapping.argList(rankC, 'idx_', [rankC-2, 'k'])});
-    sum += (a * b);
-  }
-
-  outColor = vec4(sum, 0.0, 0.0, 0.0);
-}
-`;
-    console.log(code);
-    const program = this.webgl.compileProgram(code);
-
-    this.webgl.runProgram(
-      program,
-      C._texture,
-      C._texShape,
-      [{ name: 'A', texture: A._texture }, { name: 'B', texture: B._texture }], 
-      null);
-
-    return Tensor.fromBackend(C);
+    const prg = new WebGlProgramMatMul(this.webgl, {A, B, transposeA, transposeB});
+    return Tensor.fromBackend(prg.run());
   }
 
   reshape(x: Tensor, newShape: Shape): Tensor {
@@ -237,10 +177,11 @@ void main() {
       }
       return Tensor.fromBackend(new WebGLTensor(ndarr, bt._dtype));
     }
-    // do it cpu currently, could do it in GPU later. 
-    bt.DumpDataFromGPU(this.webgl);
-    ndarr = bt._array.reshape(newShape);
-    return Tensor.fromBackend(new WebGLTensor(ndarr, bt._dtype));
+    // // do it cpu currently, could do it in GPU later. 
+    // bt.DumpDataFromGPU(this.webgl);
+    // ndarr = bt._array.reshape(newShape);
+    // return Tensor.fromBackend(new WebGLTensor(ndarr, bt._dtype));
+    return null;
   }
 
   add(a: Tensor, b: Tensor): Tensor {
@@ -259,13 +200,48 @@ void main() {
     throw new Error('Not implemented');
   }
 
+  pad(x: Tensor, paddings: [number, number][]) : Tensor {
+    const btp = this.pad_bk(backendTensorOf(x), paddings);
+    return Tensor.fromBackend(btp);
+  }
+
+  pad_bk(x: WebGLTensor, paddings: [number, number][]) : WebGLTensor {
+    let padded = x._array.pad(paddings);
+    if (padded == null) {
+      const prg = new WebGlProgramPad(this.webgl, x, paddings);
+      return prg.run();
+    }
+    return new WebGLTensor(padded, x._dtype, x._texture, x._texShape);
+  }
+
   conv2d(
     x: Tensor, filter: Tensor, strides: number | [number, number],
-    padding: number[], dataFormat: 'NHWC' | 'NCHW',
-    dialations: number | [number, number],
-    groups: number = 1): Tensor {
+    padding: number[], dataFormat: 'NHWC' | 'NCHW',  dilations: number | [number, number],
+    groups: number = 1, bias: Tensor = null): Tensor {
 
-      throw new Error('Method not implemented.');
+    ASSERT(x.shape.length == 4 && filter.shape.length == 4, "Shape error input image or kernel");
+    if (!(strides instanceof Array)) strides = [strides as number, strides as number];
+    if (!(dilations instanceof Array)) dilations = [dilations as number, dilations as number];
+
+    let btx = backendTensorOf(x); // 4d tensor, NHWC or NCHW
+    let btk = backendTensorOf(filter); //[H, W, in, out] or [out, in, H, W]
+
+    if (dataFormat == 'NCHW') {
+      btx = btx.transpose([0, 2, 3, 1]);
+      btk = btk.transpose([2, 3, 1, 0]);
+    }
+    btx = this.pad_bk(btx, [[0, 0], [padding[0], padding[2]], [padding[1], padding[3]], [0, 0]]);
+
+    const prg = new WebGlProgramConv2d(
+      this.webgl, btx, btk, strides,
+      dilations, groups, 
+      backendTensorOf(bias));
+
+    let bt = prg.run();
+    if (dataFormat == 'NCHW') {
+      bt = bt.transpose([0, 3, 1, 2]);
+    }
+    return Tensor.fromBackend(bt);
   }
 };
 

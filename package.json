@@ -7,7 +7,7 @@
     "webpack": "webpack --config webpack.config.js",
     "prepare": "tsc && copyfiles src/**/*.glsl demos/**/*.js demos/**/*.css dist/",
     "scratch": "node ./dist/samples/scratch/scratch.js",
-    "tt": "mocha dist/test/test_*.js",
+    "tt": "mocha dist/test/test_conv2D.js",
     "perf": "mocha dist/test/perf_*.js",
     "test": "mocha -r ts-node/register test/test_*.ts",
     "chrome-test": "karma start karma.ts.conf.js",

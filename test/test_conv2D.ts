@@ -1,21 +1,10 @@
-import * as fs from 'fs';
 
-import * as tf from '../../src';
-import {Tensor} from '../../src';
+import { assert } from 'chai';
 
-import { NDView as NdArray} from '../../src/NdView/ndview';
+import * as tf from '../src/index';
+import {Tensor} from '../src/index';
 
-function loadTensor(pathName: string, shape: number[]) : Tensor {
-    const buffer = fs.readFileSync(pathName);
-    const flen = buffer.byteLength / 4;
-    const ta = new Float32Array(flen);
-    const dv = new DataView(buffer.buffer);
-    for (let i = 0; i < flen; ++i) {
-        ta[i] = dv.getFloat32(i * 4, true);
-    }
-
-    return tf.tensor(ta, shape);
-}
+import { NDView as NdArray} from '../src/NdView/ndview';
 
 function isNumberNotSame(a: number, b: number) : Boolean {
     const aa = Math.abs(a);
@@ -81,10 +70,8 @@ function testConv2D(
     
     ga.forEach((gv, index, loc) => {
         const rv = ra.get(...loc);
-        if (isNumberNotSame(gv, rv)) {
-            throw new Error(`not equal @`+ JSON.stringify(loc) + `  gold:${gv}, r:${rv}`);
-        }
-    });
+        assert(!isNumberNotSame(gv, rv), `not equal @`+ JSON.stringify(loc) + `  gold:${gv}, r:${rv}`);
+     });
 }
 
 
@@ -121,33 +108,27 @@ const goldb = [ // for padding [1,1,1,1]
     +1.0, -1.0, +0.0
 ];
 
-testConv2D(
-    tf.tensor(ima, [1, 1, 4, 4]),
-    tf.tensor(flta, [2, 1, 2, 2]),
-    tf.tensor(golda, [1, 2, 2, 2]),
-    [0, 0, 0, 0],
-    [2, 2],
-    [1, 1]
-);
+describe("Conv2D", function() {
+    it("x[1x1x4x4, k[2x1x2x2], nopadding, strides=[2,2]", function() {
+        testConv2D(
+            tf.tensor(ima, [1, 1, 4, 4]),
+            tf.tensor(flta, [2, 1, 2, 2]),
+            tf.tensor(golda, [1, 2, 2, 2]),
+            [0, 0, 0, 0],
+            [2, 2],
+            [1, 1]
+        );
+    });
 
-testConv2D(
-    tf.tensor(ima, [1, 1, 4, 4]),
-    tf.tensor(flta, [2, 1, 2, 2]),
-    tf.tensor(goldb, [1, 2, 3, 3]),
-    [1, 1, 1, 1],
-    [2, 2],
-    [1, 1]
-);
-
-testConv2D(
-    loadTensor("testdata/imageInput.buf", [1, 3, 224, 224]),
-    loadTensor("testdata/filter.buf", [64, 3, 7, 7]),
-    loadTensor("testdata/convResult.buf", [1, 64, 112, 112]),
-    [3, 3, 3, 3],
-    [2, 2],
-    [1, 1],
-    (x: number) => x.toFixed(7),
-    [5, -3],
-    [2, -1]
-);
+    it("x[1x1x4x4, k[2x1x2x2], pad[1,1,1,1], strides=[2,2]", function() {
+        testConv2D(
+            tf.tensor(ima, [1, 1, 4, 4]),
+            tf.tensor(flta, [2, 1, 2, 2]),
+            tf.tensor(goldb, [1, 2, 3, 3]),
+            [1, 1, 1, 1],
+            [2, 2],
+            [1, 1]
+        );
+    });
+});
 

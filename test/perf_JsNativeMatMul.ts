@@ -1,6 +1,6 @@
 import { assert } from 'chai';
 
-import * as tf from '../src/index';
+import * as tf from '../src';
 
 export function squareMatMul(C: Float32Array, A: Float32Array, B: Float32Array, w: number) {
     C.fill(0);

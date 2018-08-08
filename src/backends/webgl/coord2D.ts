@@ -79,36 +79,46 @@ export class CoordinateMapping {
     }
 
     // this tensor is for render output, so it only contains shape/stride
-    static snippetLogicFormST(x: WebGLTensor, name: string, indexPrefix = 'idx_', stPrefix: string = 'outTex'): string {
+    // if indexNames is string, treat it as prefix, concat it with 0, 1, ... => idx_0, idx_1, ...
+    static snippetLogicFormST(x: WebGLTensor, name: string, indexNames: string|string[] = 'idx_', stPrefix: string = 'outTex', indent: string = '    '): string {
         const nda = x._array;
         const codes: string[] = [];
+        if (!Array.isArray(indexNames)) {
+            indexNames = new Array(x.shape.length).fill(indexNames);
+            indexNames = indexNames.map((v, i) => `${v}${i}`);
+        }
 
         if (x._array.shape.length == 2 && x._array.shape[0] == x._texShape[1] && x._array.shape[1] == x._texShape[0]) {
-            codes.push(`int ${indexPrefix}1  = int(float(${x._array.shape[1]}) * ${stPrefix}.s); //${name}._texW = ${x._array.shape[1]}\n`);
-            codes.push(`  int ${indexPrefix}0  = int(float(${x._array.shape[0]}) * ${stPrefix}.t); //${name}._texH = ${x._array.shape[0]}`);
+            codes.push(`int ${indexNames[1]}  = int(float(${x._array.shape[1]}) * ${stPrefix}.s); //${name}._texW = ${x._array.shape[1]}\n`);
+            codes.push(`${indent}int ${indexNames[0]}  = int(float(${x._array.shape[0]}) * ${stPrefix}.t); //${name}._texH = ${x._array.shape[0]}`);
             return codes.join('');
         }
         
-        codes.push(`int ${indexPrefix}x = int(float(${x._texShape[0]}) * ${stPrefix}.s); //${name}._texW\n`);
-        codes.push(`  int ${indexPrefix}y = int(float(${x._texShape[1]}) * ${stPrefix}.t); //${name}._texH\n`);
-        codes.push(`  int indexOf${name} = ${indexPrefix}y * ${x._texShape[0]} + ${indexPrefix}x;\n`);
+        codes.push(`int ${stPrefix}_x = int(float(${x._texShape[0]}) * ${stPrefix}.s); //${name}._texW\n`);
+        codes.push(`${indent}int ${stPrefix}_y = int(float(${x._texShape[1]}) * ${stPrefix}.t); //${name}._texH\n`);
+        codes.push(`${indent}int indexOf${name} = ${stPrefix}_y * ${x._texShape[0]} + ${stPrefix}_x;\n`);
 
         for (let i = 0; i < nda.coreShape.length; ++i) {
             const stride = nda.coreStride[i];
-            codes.push(`  int ${indexPrefix}${i} =  int(indexOf${name} / ${stride});`);
+            codes.push(`${indent}int ${indexNames[i]} =  int(indexOf${name} / ${stride});`);
             if (i != nda.coreShape.length - 1) {
-                codes.push(`\n  indexOf${name} -= (${indexPrefix}${i} * ${stride});\n`);
+                codes.push(`\n${indent}indexOf${name} -= (${indexNames[i]} * ${stride});\n`);
             }
         }
         return codes.join('');
     }
 
-    static argList(argCount: number, indexPrefix = 'idx_', ...replaces: [number, string][]) : string {
+    static argList(argCount: number, indexNames: string|string[] = 'idx_', ...replaces: [number, string][]) : string {
+        if (!Array.isArray(indexNames)) {
+            indexNames = new Array(argCount).fill(indexNames);
+            indexNames = indexNames.map((v, i) => `${v}${i}`);
+        }
+
         const parts = [];
         for (let i = 0; i < argCount; ++i) {
             if (i > 0) parts.push(', ');
             const pair = replaces.find((v, idx) => v[0] == i);
-            parts.push( pair ? pair[1] : `${indexPrefix}${i}` );
+            parts.push( pair ? pair[1] : `${indexNames[i]}` );
         }
         return parts.join('');
     }

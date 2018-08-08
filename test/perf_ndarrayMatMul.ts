@@ -1,6 +1,6 @@
 import { assert } from 'chai';
 
-import * as tf from '../src/index';
+import * as tf from '../src';
 import * as ndarray from 'ndarray';
 import * as nda_gemm from 'ndarray-gemm';
 

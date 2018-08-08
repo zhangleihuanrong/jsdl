@@ -15,7 +15,8 @@ export interface Backend extends TensorManager{
         padding: number[], 
         dataFormat: 'NHWC' | 'NCHW', 
         dialations: number | [number, number],
-        groups: number) : Tensor;
+        groups: number,
+        bias: Tensor) : Tensor;
 
     reshape(x: Tensor, newShape: number[]) : Tensor;
     transpose(x: Tensor, perm?: number[]) : Tensor;

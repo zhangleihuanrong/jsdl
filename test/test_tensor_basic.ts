@@ -1,6 +1,6 @@
 import { assert } from 'chai';
 
-import * as tf from '../src/index';
+import * as tf from '../src';
 
 describe("Basic Tensor", function() {
   it("Should work", function() {
