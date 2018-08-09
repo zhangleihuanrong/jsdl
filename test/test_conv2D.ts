@@ -134,6 +134,13 @@ const goldb = [ // for padding [1,1,1,1]
 ];
 
 describe("Conv2D", function() {
+    it("relu", function() {
+        const X1 = tf.tensor([1.0, 2.0, -1.0, -2.0, -3.0, 0.0], [2, 3]);
+        tf.print(X1);
+        const ReluX1 = tf.relu(X1);
+        tf.print(ReluX1);
+    }).timeout(10000);
+
     it("x[1x3x224x224, k[64x3x7x7], pad[3,3,3,3], strides=[2,2]", async function() {
         console.log(`===========Using backend: ${ENV.getCurrentBackendName()} ============`);
         console.log('Downloading imageInput.buf...');

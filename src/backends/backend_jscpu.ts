@@ -349,6 +349,22 @@ class JsNdarrayBackend implements Backend {
         const r = Tensor.fromBackend(new NdArrayTensor(ndvr, 'float32'));
         return r;
     }
+    
+    batchNormalize(x: Tensor, scale: Tensor, bias: Tensor, mean: Tensor, variance: Tensor, epsilon: number, momentum: number, spatial: number): Tensor {
+        throw new Error("Method not implemented.");
+    }
+    maxPool(x: Tensor, kernelShape: number[], strides: number[], pads: number[], storageOrder: number): Tensor {
+        throw new Error("Method not implemented.");
+    }
+    averagePool(x: Tensor, kernelShape: number[], strides: number[], pads: number[], count_in_pad: number): Tensor {
+        throw new Error("Method not implemented.");
+    }
+    gemm(a: Tensor, b: Tensor, bias?: Tensor, alpha?: number, beta?: number, transposeA?: boolean, transposeB?: boolean): Tensor {
+        throw new Error("Method not implemented.");
+    }
+    softmax(logits: Tensor, axis?: number): Tensor {
+        throw new Error("Method not implemented.");
+    }
 }
 
 const backendName: string = "Backend_JSCPU";

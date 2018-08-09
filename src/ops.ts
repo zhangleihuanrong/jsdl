@@ -21,6 +21,11 @@ const conv2d = ENV.engine.backend.conv2d.bind(ENV.engine.backend);
 const tile =  ENV.engine.backend.tile.bind(ENV.engine.backend);
 const pick =  ENV.engine.backend.pick.bind(ENV.engine.backend);
 const read = ENV.engine.backend.read.bind(ENV.engine.backend);
+const batchNormalize = ENV.engine.backend.batchNormalize.bind(ENV.engine.backend);
+const maxPool = ENV.engine.backend.maxPool.bind(ENV.engine.backend);
+const averagePool = ENV.engine.backend.averagePool.bind(ENV.engine.backend);
+const gemm = ENV.engine.backend.gemm.bind(ENV.engine.backend);
+const softmax = ENV.engine.backend.softmax.bind(ENV.engine.backend);
 
 
 // static Tensor methods
@@ -31,12 +36,14 @@ const truncatedNorm = Tensor.truncatedNorm;
 
 export { tensor, randomNorm, randomUniform, truncatedNorm,
     
-        read,
+        read, 
 
         printTensor as print, 
         
         transpose, reshape, tile, pick,
         
-        matMul, neg, add, multiply, relu,
+        relu, neg,
 
-        conv2d };
+        matMul, add, multiply,
+
+        conv2d, batchNormalize, maxPool, averagePool, gemm, softmax };

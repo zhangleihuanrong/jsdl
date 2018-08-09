@@ -8,6 +8,7 @@ import { WebGL2Driver } from './webgl/webgl2';
 import { WebGlProgramMatMul } from './webgl/matMul';
 import { WebGlProgramConv2d } from './webgl/conv2D';
 import { WebGlProgramPad } from './webgl/padding';
+import { WebGlProgramUniOp } from './webgl/uniops';
 
 export class WebGLTensor implements BackendTensor {
   _dtype: DataType;
@@ -185,6 +186,10 @@ class WebGLBackend implements Backend {
   }
 
   add(a: Tensor, b: Tensor): Tensor {
+    return Tensor.fromBackend(this.add_bk(backendTensorOf(a), backendTensorOf(b)));
+  }
+
+  add_bk(a: WebGLTensor, b: WebGLTensor): WebGLTensor {
     throw new Error('Not implemented');
   }
 
@@ -197,7 +202,12 @@ class WebGLBackend implements Backend {
   }
 
   relu(x: Tensor): Tensor {
-    throw new Error('Not implemented');
+      return Tensor.fromBackend(this.relu_bk(backendTensorOf(x)));
+  }
+
+  relu_bk(btx: WebGLTensor) : WebGLTensor {
+      const prg = new WebGlProgramUniOp(this.webgl, 'relu', btx);
+      return prg.run();
   }
 
   pad(x: Tensor, paddings: [number, number][]) : Tensor {
@@ -218,15 +228,23 @@ class WebGLBackend implements Backend {
     x: Tensor, filter: Tensor, strides: number | [number, number],
     padding: number[], dataFormat: 'NHWC' | 'NCHW',  dilations: number | [number, number],
     groups: number = 1, bias: Tensor = null): Tensor {
+      const br = this.conv2d_bk(backendTensorOf(x), backendTensorOf(filter), strides, padding, 
+          dataFormat, dilations, groups, bias);
+      return Tensor.fromBackend(br);
+  }
 
-    ASSERT(x.shape.length == 4 && filter.shape.length == 4, "Shape error input image or kernel");
+  // btx: [N, C, H, W] or [N, H, W, C]
+  // btk: [H, W, in, out] or [out, in, H, W]
+  conv2d_bk(
+    btx: WebGLTensor, btk: WebGLTensor, strides: number | [number, number],
+    padding: number[], dataFormat: 'NHWC' | 'NCHW',  dilations: number | [number, number],
+    groups: number = 1, bias: Tensor = null): WebGLTensor {
+
+    ASSERT(btx.shape.length == 4 && btk.shape.length == 4, "Shape error input image or kernel");
     if (!(strides instanceof Array)) strides = [strides as number, strides as number];
     if (!(dilations instanceof Array)) dilations = [dilations as number, dilations as number];
     if (padding == null) padding = [0, 0, 0, 0];
     ASSERT(padding.length == 4 && padding.every(v => v >= 0 && (v == (v|0))), "padding values is wrong!");
-
-    let btx = backendTensorOf(x); // 4d tensor, NHWC or NCHW
-    let btk = backendTensorOf(filter); //[H, W, in, out] or [out, in, H, W]
 
     if (dataFormat == 'NCHW') {
       btx = btx.transpose([0, 2, 3, 1]);
@@ -243,7 +261,27 @@ class WebGLBackend implements Backend {
     if (dataFormat == 'NCHW') {
       bt = bt.transpose([0, 3, 1, 2]);
     }
-    return Tensor.fromBackend(bt);
+    return bt;
+  }
+
+  batchNormalize(x: Tensor, scale: Tensor, bias: Tensor, mean: Tensor, variance: Tensor, epsilon: number, momentum: number, spatial: number): Tensor {
+    throw new Error("Method not implemented.");
+  }
+  maxPool(x: Tensor, kernelShape: number[], strides: number[], pads: number[], storageOrder: number): Tensor {
+    throw new Error("Method not implemented.");
+  }
+  averagePool(x: Tensor, kernelShape: number[], strides: number[], pads: number[], count_in_pad: number): Tensor {
+    throw new Error("Method not implemented.");
+  }
+  gemm(a: Tensor, b: Tensor, bias?: Tensor, alpha?: number, beta?: number, transposeA?: boolean, transposeB?: boolean): Tensor {
+    throw new Error("Method not implemented.");
+  }
+  softmax(logits: Tensor, axis?: number): Tensor {
+    throw new Error("Method not implemented.");
+  }
+  softmax_bk(logits: WebGLTensor, axis?: number) : WebGLTensor {
+    const prg = new WebGlProgramUniOp(this.webgl, 'relu', null);
+    return prg.run();
   }
 };
 
