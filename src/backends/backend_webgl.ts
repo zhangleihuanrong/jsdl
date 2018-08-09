@@ -222,6 +222,8 @@ class WebGLBackend implements Backend {
     ASSERT(x.shape.length == 4 && filter.shape.length == 4, "Shape error input image or kernel");
     if (!(strides instanceof Array)) strides = [strides as number, strides as number];
     if (!(dilations instanceof Array)) dilations = [dilations as number, dilations as number];
+    if (padding == null) padding = [0, 0, 0, 0];
+    ASSERT(padding.length == 4 && padding.every(v => v >= 0 && (v == (v|0))), "padding values is wrong!");
 
     let btx = backendTensorOf(x); // 4d tensor, NHWC or NCHW
     let btk = backendTensorOf(filter); //[H, W, in, out] or [out, in, H, W]
@@ -230,14 +232,14 @@ class WebGLBackend implements Backend {
       btx = btx.transpose([0, 2, 3, 1]);
       btk = btk.transpose([2, 3, 1, 0]);
     }
-    btx = this.pad_bk(btx, [[0, 0], [padding[0], padding[2]], [padding[1], padding[3]], [0, 0]]);
 
     const prg = new WebGlProgramConv2d(
-      this.webgl, btx, btk, strides,
-      dilations, groups, 
+      this.webgl, btx, btk, padding,
+      strides, dilations, groups, 
       backendTensorOf(bias));
 
     let bt = prg.run();
+
     if (dataFormat == 'NCHW') {
       bt = bt.transpose([0, 3, 1, 2]);
     }

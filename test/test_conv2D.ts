@@ -2,7 +2,7 @@ import axios from 'axios';
 import { assert } from 'chai';
 
 import { ENV } from '../src/environments';
-//ENV.preferBackend("Backend_JSCPU");
+ENV.preferBackend("Backend_JSCPU");
 
 import { NDView as NdArray} from '../src/NdView/ndview';
 import * as tf from '../src/index';
@@ -60,30 +60,31 @@ function testConv2D(
     otherAxisExclude: [number, number] = null
 ) {
     image.name = `image${image.id}`;
-    //tf.print(image, number2string, lastAxisExclude, otherAxisExclude);
+    tf.print(image, number2string, lastAxisExclude, otherAxisExclude);
 
     filter.name = `filter${filter.id}`;
-    //tf.print(filter, number2string, lastAxisExclude, otherAxisExclude);
+    tf.print(filter, number2string, lastAxisExclude, otherAxisExclude);
+    console.log(`----------padding:${padding}, strides:${strides}, dilations:${dilations}`);
         
-    goldenResult.name = `GoldConv2DResult${goldenResult.id}`;
-    //tf.print(goldenResult, number2string, lastAxisExclude, otherAxisExclude);
-    console.log(`padding:${padding}, strides:${strides}, dilations:${dilations}`);
     let r: Tensor = null;
-    const rounds = 3;
+    const rounds = 1;
     const start =  Date.now();
     for (let rep=0; rep < rounds; ++rep) {
         const itStart =  Date.now();
         r = tf.conv2d(image, filter, strides, padding, 'NCHW', dilations);
-        const ta = tf.read(r);
+        //tf.read(r);
         const millis = Date.now() - itStart;
-        console.log(`  --${rep} iteration: ${millis}ms, result elements: ${ta.length}`);
+        console.log(`  --${rep} iteration: ${millis}ms, result elements: ${r.shape}`);
     }
     const millis = Date.now() - start;
     const avgMillis = millis / rounds;
     console.log(`  --Total: ${millis}ms, avg:${avgMillis}ms`);
-    
+
+    goldenResult.name = `GoldConv2DResult${goldenResult.id}`;
+    tf.print(goldenResult, number2string, lastAxisExclude, otherAxisExclude);
+
     r.name = `Conv2dResult${r.id}`;
-    //tf.print(r, number2string, lastAxisExclude, otherAxisExclude);
+    tf.print(r, number2string, lastAxisExclude, otherAxisExclude);
  
     if (!arraysEqual(goldenResult.shape, r.shape)) {
         throw new Error('Not same shape, gold:' + JSON.stringify(goldenResult.shape) + " .vs. target:" + JSON.stringify(r.shape));
@@ -133,6 +134,27 @@ const goldb = [ // for padding [1,1,1,1]
 ];
 
 describe("Conv2D", function() {
+    it("x[1x3x224x224, k[64x3x7x7], pad[3,3,3,3], strides=[2,2]", async function() {
+        console.log(`===========Using backend: ${ENV.getCurrentBackendName()} ============`);
+        console.log('Downloading imageInput.buf...');
+        const pX = await loadTensor("./testdata/imageInput.buf", [1, 3, 224, 224]);
+        console.log('Downloading filter.buf...');
+        const pF = await loadTensor("./testdata/filter.buf", [64, 3, 7, 7]);
+        console.log('Downloading goldresult...');
+        const pGold = await loadTensor("./testdata/convResult.buf", [1, 64, 112, 112]);
+        console.log('start n-time conv2d...');
+
+        testConv2D(
+            pX, pF, pGold,
+            [3, 3, 3, 3],
+            [2, 2],
+            [1, 1],
+            (x: number) => x.toFixed(7),
+            [5, -3],
+            [2, -1]
+        );
+    }).timeout(100000);
+
     it("x[1x1x4x4, k[2x1x2x2], nopadding, strides=[2,2]", function() {
         console.log(`===========Using backend: ${ENV.getCurrentBackendName()} ============`);
         testConv2D(
@@ -158,25 +180,5 @@ describe("Conv2D", function() {
     });
 
 
-    it("x[1x3x224x224, k[64x3x7x7], pad[3,3,3,3], strides=[2,2]", async function() {
-        console.log(`===========Using backend: ${ENV.getCurrentBackendName()} ============`);
-        console.log('Downloading imageInput.buf...');
-        const pX = await loadTensor("./testdata/imageInput.buf", [1, 3, 224, 224]);
-        console.log('Downloading filter.buf...');
-        const pF = await loadTensor("./testdata/filter.buf", [64, 3, 7, 7]);
-        console.log('Downloading goldresult...');
-        const pGold = await loadTensor("./testdata/convResult.buf", [1, 64, 112, 112]);
-        console.log('start n-time conv2d...');
-
-        testConv2D(
-            pX, pF, pGold,
-            [3, 3, 3, 3],
-            [2, 2],
-            [1, 1],
-            (x: number) => x.toFixed(7),
-            [5, -3],
-            [2, -1]
-        );
-    }).timeout(100000);
 });
 

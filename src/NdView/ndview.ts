@@ -388,7 +388,7 @@ export class NDView {
             throw new Error("XXXXX.....XXXXX....need data to compact...");
         }
         
-        // console.log("XXXXX.....XXXXX....compacting data...");
+        console.log("XXXXX.....XXXXX....compacting data...");
         // TODO: following is slow, make it fast
         let d: NdArrayLike = null;
         if (Array.isArray(this.data)) {

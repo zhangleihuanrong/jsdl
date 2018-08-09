@@ -15,6 +15,11 @@ void main () {
 }
 `;
 
+export type UniformParameter = {
+    name: string,
+    dtype: DataType,
+    value: number | number[]
+};
 
 export class WebGL2Driver {
     _isSupported: boolean = false;
@@ -24,6 +29,7 @@ export class WebGL2Driver {
     MAX_TEXTURE_SIZE: number = 0;
     MAX_TEXTURE_IMAGE_UNITS: number = 0;
     _refs = { textures: [], buffers: [] };
+    _programs : Map<String, WebGLProgram>;
 
     constructor() {
         if (typeof window !== 'undefined') {
@@ -36,12 +42,20 @@ export class WebGL2Driver {
                 this.MAX_TEXTURE_SIZE = gl.getParameter(gl.MAX_TEXTURE_SIZE);
                 this.MAX_TEXTURE_IMAGE_UNITS = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS);
                 this.createCommonVertexShader();
+                this._programs = new Map<String, WebGLProgram>();
             } else {
                 console.error('Unable to initialize WebGL2!.');
             }
         }
     }
 
+    getProgram(name: string) : WebGLProgram {
+        return (this._programs.has(name)) ? this._programs.get(name) : null;
+    }
+
+    setProgram(name: string, prg: WebGLProgram) {
+        this._programs.set(name, prg);
+    }
 
     createCommonVertexShader() {
         const gl = this._glContext;
@@ -193,21 +207,22 @@ export class WebGL2Driver {
         }
     }
 
-    bindUniforms(program: WebGLProgram, uniforms: { value: number | number[], type: DataType, name: string }[]) {
+    bindUniforms(program: WebGLProgram, uniforms: UniformParameter[]) {
         if (uniforms) {
             const gl = this._glContext;
-            uniforms.forEach(({ value, type, name }) => {
+            uniforms.forEach(({ value, dtype, name }) => {
                 const loc = gl.getUniformLocation(program, name);
-                if (type === 'float32') {
+                if (dtype === 'float32') {
                     if (Array.isArray(value)) {
-                        eval(`gl.uniform${value.length}fv(loc, value)`);
+                        gl.uniform1fv(loc, value);
                     }
                     else {
                         gl.uniform1f(loc, value as number);
                     }
-                } else if (type === 'int32' || type === 'bool') {
+                } else if (dtype === 'int32' || dtype === 'bool') {
                     if (Array.isArray(value)) {
-                        eval(`gl.uniform${value.length}fi(loc, value)`);
+                        const ifa = new Int32Array(value);
+                        gl.uniform1iv(loc, ifa);
                     }
                     else {
                         gl.uniform1i(loc, value as number);
@@ -230,34 +245,61 @@ export class WebGL2Driver {
     }
 
 
-    bindOutputTexture(outputTexture: WebGLTexture, shape: number[], framebuffer?: WebGLFramebuffer): WebGLFramebuffer {
-        const gl = this._glContext;
-        gl.viewport(0, 0, shape[0], shape[1]);
-        const activeFramebuffer = framebuffer || gl.createFramebuffer();
-        gl.bindFramebuffer(gl.FRAMEBUFFER, activeFramebuffer);
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, outputTexture, 0);
-        // check if you can read from this type of texture.
-        if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE) {
-            throw new Error('Can not read from this type of texture.')
-        }
-        return activeFramebuffer;
+    getWebGLErrorMessage(status: number): string {
+      const gl = this._glContext;
+      switch (status) {
+        case gl.NO_ERROR:
+          return 'NO_ERROR';
+        case gl.INVALID_ENUM:
+          return 'INVALID_ENUM';
+        case gl.INVALID_VALUE:
+          return 'INVALID_VALUE';
+        case gl.INVALID_OPERATION:
+          return 'INVALID_OPERATION';
+        case gl.INVALID_FRAMEBUFFER_OPERATION:
+          return 'INVALID_FRAMEBUFFER_OPERATION';
+        case gl.OUT_OF_MEMORY:
+          return 'OUT_OF_MEMORY';
+        case gl.CONTEXT_LOST_WEBGL:
+          return 'CONTEXT_LOST_WEBGL';
+        default:
+          return `Unknown error code ${status}`;
+      }
     }
-
 
     runProgram(program: WebGLProgram,
         outTexture: WebGLTexture,
         outTexShape: [number, number], // [W, H]
         inTextures: { name: string, texture: WebGLTexture }[],
-        uniforms: { value: number | number[], type: DataType, name: string }[]) {
+        uniforms: UniformParameter[]) {
 
         const gl = this._glContext;
         gl.useProgram(program);
         this.bindUniforms(program, uniforms);
         this.bindInputTextures(program, inTextures);
-        const fb = this.bindOutputTexture(outTexture, outTexShape);
+
+        gl.viewport(0, 0, outTexShape[0], outTexShape[1]);
+        const frameBuffer = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffer);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, outTexture, 0);
+        if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE) {
+            throw new Error('Can not bind texture to output framebuffer!')
+        }
+
         gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+        const error = gl.getError();
+        if (error !== gl.NO_ERROR) {
+          throw new Error('WebGL Error: ' + this.getWebGLErrorMessage(error));
+        }
+
+        // Just read one pixel
+        // const len = 4;
+        // const rgbaData: TypedArray = new Float32Array(len);
+        // gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, rgbaData);
+
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-        gl.deleteFramebuffer(fb);
+        gl.deleteFramebuffer(frameBuffer);
+        gl.useProgram(null);
     }
     
 
@@ -266,6 +308,8 @@ export class WebGL2Driver {
         const gl = this._glContext;
         const W = texShape[0];
         const H = texShape[1];
+
+        const timeBegan = Date.now();
 
         if (flatLen <= 0) flatLen = W * H;
         let ndx: TypedArray = null;
@@ -291,6 +335,9 @@ export class WebGL2Driver {
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
             gl.deleteFramebuffer(framebuffer);
         }
+
+        const dumpTimeMs = (Date.now() - timeBegan);
+        console.log(`---Dump texture in ${dumpTimeMs}ms for ${W}*${H} texture...`);
         return ndx;
     }
 }

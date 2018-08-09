@@ -1,8 +1,59 @@
 import { WebGLTensor } from '../backend_webgl';
+import { DataType } from '../../types';
 
 
 // Generate glsl code for coordinate mapping, get texture value for Tensor
 export class CoordinateMapping {
+
+    // generate code to handle normal case, where shape/strides information are passed by attributes:
+    //    uniform int ${name}Shape[rank];
+    //    uniform int ${name}Shape[rank];
+    //    uniform int ${name}OffsetTexWTexY[3];
+    static glslGetCoreOnly(rank: number, name: string, dtype: DataType, functionPrefix = 'get'): string {
+        const glslTexValueType = (dtype == 'float32') ? 'float' : (dtype == 'int32') ? 'int' : 'uint';
+
+        const codes: string[] = [`${glslTexValueType} ${functionPrefix}${name}(`];
+        for (let i = 0; i < rank; ++i) {
+            codes.push((i > 0) ? `, int i${i}` : `int i${i}`);
+        }
+        codes.push(') {\n');
+
+        codes.push(`  int coreIndex = ${name}OffsetTexWTexY[0]`);
+        for (let i = 0; i < rank; ++i) {
+            codes.push(` + i${i} * ${name}Stride[${i}]`);
+        }
+        codes.push('; \n')
+
+        codes.push(`  int texY = int(coreIndex / ${name}OffsetTexWTexY[1]); // texW\n`);
+        codes.push(`  int texX = coreIndex - (texY * ${name}OffsetTexWTexY[1]);\n`);
+        codes.push(`  return texelFetch(${name}, ivec2(texX, texY), 0).r;\n`);
+
+        codes.push('}');
+        return codes.join('');
+    }
+
+
+    // this tensor is for render output, so it only contains shape/stride
+    // if indexNames is string, treat it as prefix, concat it with 0, 1, ... => idx_0, idx_1, ...
+    static generalOutputIndexFormST(rank: number, name: string, indexNames: string|string[] = 'idx_', stPrefix: string = 'outTex', indent: string = '    '): string {
+        const codes: string[] = [];
+        if (!Array.isArray(indexNames)) {
+            indexNames = new Array(rank).fill(indexNames);
+            indexNames = indexNames.map((v, i) => `${v}${i}`);
+        }
+
+        codes.push(`int ${stPrefix}_x = int(float(${name}OffsetTexWTexY[1]) * ${stPrefix}.s); //${name}._texW\n`);
+        codes.push(`${indent}int ${stPrefix}_y = int(float(${name}OffsetTexWTexY[2]) * ${stPrefix}.t); //${name}._texH\n`);
+        codes.push(`${indent}int indexOf${name} = ${stPrefix}_y * ${name}OffsetTexWTexY[1] + ${stPrefix}_x;\n`);
+
+        for (let i = 0; i < rank; ++i) {
+            codes.push(`${indent}int ${indexNames[i]} =  int(indexOf${name} / ${name}Stride[${i}]);`);
+            if (i != rank - 1) {
+                codes.push(`\n${indent}indexOf${name} -= (${indexNames[i]} * ${name}Stride[${i}]);\n`);
+            }
+        }
+        return codes.join('');
+    }
 
 
     // float getA(int i0, int i1...) {
