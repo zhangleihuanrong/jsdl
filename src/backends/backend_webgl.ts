@@ -8,7 +8,9 @@ import { WebGL2Driver } from './webgl/webgl2';
 import { WebGlProgramMatMul } from './webgl/matMul';
 import { WebGlProgramConv2d } from './webgl/conv2D';
 import { WebGlProgramPad } from './webgl/padding';
-import { WebGlProgramUniOp } from './webgl/uniops';
+import { WebGlProgramUnaryOp } from './webgl/unaryops';
+import { WebGlProgramSum2D } from './webgl/sum';
+import { WebGlProgramLogSumExp2D } from './webgl/logSumExp';
 
 export class WebGLTensor implements BackendTensor {
   _dtype: DataType;
@@ -39,13 +41,17 @@ export class WebGLTensor implements BackendTensor {
     return this;
   }
 
+  calc2DTextureSize(webgl: WebGL2Driver) {
+    this._texShape = webgl.calc2DTextureSizeForShape(this._array.coreShape);
+  }
+
   PrepareGpuData(webgl: WebGL2Driver): WebGLTensor {
     if (!this._texture) {
       ASSERT(this._array.data == null, "cpu data already exists");
       ASSERT(this._array.isOriginalCore(), "ndarray information should only mapping to original data!");
       // create texture for render into it, no cpu data should exists
       // infact, should only have shape and stride, others should be null or zero.
-      this._texShape = webgl.calc2DTextureSizeForShape(this._array.coreShape);
+      this.calc2DTextureSize(webgl);
       this._texture = webgl.create2DGLTexture(null, this._texShape, this._dtype);
     }
     return this;
@@ -206,7 +212,7 @@ class WebGLBackend implements Backend {
   }
 
   relu_bk(btx: WebGLTensor) : WebGLTensor {
-      const prg = new WebGlProgramUniOp(this.webgl, 'relu', btx);
+      const prg = new WebGlProgramUnaryOp(this.webgl, 'relu', btx);
       return prg.run();
   }
 
@@ -276,11 +282,33 @@ class WebGLBackend implements Backend {
   gemm(a: Tensor, b: Tensor, bias?: Tensor, alpha?: number, beta?: number, transposeA?: boolean, transposeB?: boolean): Tensor {
     throw new Error("Method not implemented.");
   }
+  
   softmax(logits: Tensor, axis?: number): Tensor {
     throw new Error("Method not implemented.");
   }
+
   softmax_bk(logits: WebGLTensor, axis?: number) : WebGLTensor {
-    const prg = new WebGlProgramUniOp(this.webgl, 'relu', null);
+    const logSumExp = new WebGlProgramLogSumExp2D(this.webgl, logits);
+    const lse = logSumExp.run();
+    return null;
+  }
+
+  exp(x: Tensor): Tensor {
+    return Tensor.fromBackend(this.exp_bk(backendTensorOf(x)));
+  }
+
+  exp_bk(btx: WebGLTensor) : WebGLTensor {
+    const prg = new WebGlProgramUnaryOp(this.webgl, 'exp', btx);
+    return prg.run();
+  }
+
+  sum(x: Tensor, axises?: number[], keepDims?: boolean): Tensor {
+    return Tensor.fromBackend(this.sum_bt(backendTensorOf(x), axises, keepDims));
+  }
+
+  sum_bt(x: WebGLTensor, axises?: number[], keepDims?: boolean) : WebGLTensor {
+    // suppose x is tensor 2d and reduce on dimension 1
+    const prg = new WebGlProgramSum2D(this.webgl, x);
     return prg.run();
   }
 };

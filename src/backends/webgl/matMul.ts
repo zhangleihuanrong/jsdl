@@ -4,7 +4,7 @@ import { CoordinateMapping } from './coord2D';
 
 import { NDView as NdArray } from '../../NdView/ndview';
 import { assert as ASSERT } from '../../utils/gadget';
-import { canBroadcastTo, getUnsqueezeAxisForBroadcast, getUnsqueezedShapeForBroadcast, getBroadcastRepeats } from '../../utils/shapeTools';
+import { canBroadcastTo, getUnsqueezeAxisForBroadcast, getUnsqueezedShapeForBroadcast, getBroadcastRepeats } from '../../utils/broadcast';
 
 
 export interface WebGlMatMulParameters {

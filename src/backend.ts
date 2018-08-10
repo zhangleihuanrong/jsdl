@@ -40,6 +40,11 @@ export interface Backend extends TensorManager{
 
     relu(x: Tensor) : Tensor;
 
+    exp(x: Tensor): Tensor;
+
+    // reduce
+    sum(x: Tensor, axises?: number[], keepDims?: boolean) : Tensor;
+
     //treat [..., axis...] elements after given axis(including) vector, before axis as batchSize or sampleCount 
     softmax(logits: Tensor, axis?: number) : Tensor;
 

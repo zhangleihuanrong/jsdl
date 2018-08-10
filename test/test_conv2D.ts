@@ -5,8 +5,8 @@ import { ENV } from '../src/environments';
 ENV.preferBackend("Backend_JSCPU");
 
 import { NDView as NdArray} from '../src/NdView/ndview';
-import * as tf from '../src/index';
-import {Tensor} from '../src/index';
+import * as tf from '../src';
+import {Tensor} from '../src';
 
 function loadTensor(url: string, shape: number[]) : Promise<Tensor> {
     return new Promise((resolve, reject) => {
@@ -134,44 +134,59 @@ const goldb = [ // for padding [1,1,1,1]
 ];
 
 describe("Conv2D", function() {
-    it("relu", function() {
+    it("SUM  (int, float)", function() {
+        const X1 = tf.tensor([1.0, 2.0, -1.0, -2.0, -3.0, 0.0], [2, 3]);
+        tf.print(X1);
+        const sumX1 = tf.sum(X1);
+        tf.print(sumX1);
+
+        const iX1 = tf.tensor([1.0, 2.0, -1.0, -2.0, -3.0, 10.0], [2, 3], 'int32');
+        tf.print(iX1);
+        const sumIX1 = tf.sum(iX1);
+        tf.print(sumIX1);
+
+    }).timeout(10000);
+
+    it("RELU,EXP", function() {
         const X1 = tf.tensor([1.0, 2.0, -1.0, -2.0, -3.0, 0.0], [2, 3]);
         tf.print(X1);
         const ReluX1 = tf.relu(X1);
         tf.print(ReluX1);
+        const expX1 = tf.exp(X1);
+        tf.print(expX1);
     }).timeout(10000);
 
     it("x[1x3x224x224, k[64x3x7x7], pad[3,3,3,3], strides=[2,2]", async function() {
-        console.log(`===========Using backend: ${ENV.getCurrentBackendName()} ============`);
-        console.log('Downloading imageInput.buf...');
-        const pX = await loadTensor("./testdata/imageInput.buf", [1, 3, 224, 224]);
-        console.log('Downloading filter.buf...');
-        const pF = await loadTensor("./testdata/filter.buf", [64, 3, 7, 7]);
-        console.log('Downloading goldresult...');
-        const pGold = await loadTensor("./testdata/convResult.buf", [1, 64, 112, 112]);
-        console.log('start n-time conv2d...');
+        // console.log(`===========Using backend: ${ENV.getCurrentBackendName()} ============`);
+        // console.log('Downloading imageInput.buf...');
+        // const pX = await loadTensor("./testdata/imageInput.buf", [1, 3, 224, 224]);
+        // console.log('Downloading filter.buf...');
+        // const pF = await loadTensor("./testdata/filter.buf", [64, 3, 7, 7]);
+        // console.log('Downloading goldresult...');
+        // const pGold = await loadTensor("./testdata/convResult.buf", [1, 64, 112, 112]);
+        // console.log('start n-time conv2d...');
 
-        testConv2D(
-            pX, pF, pGold,
-            [3, 3, 3, 3],
-            [2, 2],
-            [1, 1],
-            (x: number) => x.toFixed(7),
-            [5, -3],
-            [2, -1]
-        );
+        // testConv2D(
+        //     pX, pF, pGold,
+        //     [3, 3, 3, 3],
+        //     [2, 2],
+        //     [1, 1],
+        //     (x: number) => x.toFixed(7),
+        //     [5, -3],
+        //     [2, -1]
+        // );
     }).timeout(100000);
 
     it("x[1x1x4x4, k[2x1x2x2], nopadding, strides=[2,2]", function() {
-        console.log(`===========Using backend: ${ENV.getCurrentBackendName()} ============`);
-        testConv2D(
-            tf.tensor(ima, [1, 1, 4, 4]),
-            tf.tensor(flta, [2, 1, 2, 2]),
-            tf.tensor(golda, [1, 2, 2, 2]),
-            [0, 0, 0, 0],
-            [2, 2],
-            [1, 1]
-        );
+        // console.log(`===========Using backend: ${ENV.getCurrentBackendName()} ============`);
+        // testConv2D(
+        //     tf.tensor(ima, [1, 1, 4, 4]),
+        //     tf.tensor(flta, [2, 1, 2, 2]),
+        //     tf.tensor(golda, [1, 2, 2, 2]),
+        //     [0, 0, 0, 0],
+        //     [2, 2],
+        //     [1, 1]
+        // );
     });
 
     it("x[1x1x4x4, k[2x1x2x2], pad[1,1,1,1], strides=[2,2]", function() {
@@ -185,7 +200,5 @@ describe("Conv2D", function() {
             [1, 1]
         );
     });
-
-
 });
 

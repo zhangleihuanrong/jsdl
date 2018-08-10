@@ -26,7 +26,10 @@ const maxPool = ENV.engine.backend.maxPool.bind(ENV.engine.backend);
 const averagePool = ENV.engine.backend.averagePool.bind(ENV.engine.backend);
 const gemm = ENV.engine.backend.gemm.bind(ENV.engine.backend);
 const softmax = ENV.engine.backend.softmax.bind(ENV.engine.backend);
+const exp = ENV.engine.backend.exp.bind(ENV.engine.backend);
 
+// reduce related
+const sum = ENV.engine.backend.sum.bind(ENV.engine.backend);
 
 // static Tensor methods
 const tensor = Tensor.create;
@@ -34,16 +37,25 @@ const randomNorm = Tensor.randomNorm;
 const randomUniform = Tensor.randomUniform;
 const truncatedNorm = Tensor.truncatedNorm;
 
-export { tensor, randomNorm, randomUniform, truncatedNorm,
+export {
+    // Creation, initialize, etc...
+    tensor, randomNorm, randomUniform, truncatedNorm,
     
-        read, 
+    read,
 
-        printTensor as print, 
-        
-        transpose, reshape, tile, pick,
-        
-        relu, neg,
+    printTensor as print, 
+    
+    // meta operations
+    transpose, reshape, tile, pick,
+    
+    // unary operations
+    relu, neg, exp,
 
-        matMul, add, multiply,
+    // reduce operations
+    sum,
 
-        conv2d, batchNormalize, maxPool, averagePool, gemm, softmax };
+    // binary operation
+    matMul, add, multiply,
+
+    conv2d, batchNormalize, maxPool, averagePool, gemm, softmax
+};

@@ -5,7 +5,7 @@ import { Backend } from '../backend';
 import { assert as ASSERT } from '../utils/gadget';
 
 import { NDView as NdArray } from '../NdView/ndview';
-import { canBroadcastTo, getUnsqueezeAxisForBroadcast, getUnsqueezedShapeForBroadcast, getBroadcastRepeats } from '../utils/shapeTools';
+import { canBroadcastTo, getUnsqueezeAxisForBroadcast, getUnsqueezedShapeForBroadcast, getBroadcastRepeats } from '../utils/broadcast';
 import * as nd from 'ndarray';
 import * as nd_gemm from 'ndarray-gemm';
 import * as nd_ops from 'ndarray-ops';
@@ -363,6 +363,12 @@ class JsNdarrayBackend implements Backend {
         throw new Error("Method not implemented.");
     }
     softmax(logits: Tensor, axis?: number): Tensor {
+        throw new Error("Method not implemented.");
+    }
+    exp(x: Tensor): Tensor {
+        throw new Error("Method not implemented.");
+    }
+    sum(x: Tensor, axises?: number[], keepDims?: boolean): Tensor {
         throw new Error("Method not implemented.");
     }
 }

@@ -3,7 +3,7 @@ import { assert } from 'chai';
 import { ENV } from '../src/environments';
 //ENV.preferBackend("Backend_JSCPU");
 
-import * as tf from '../src/index';
+import * as tf from '../src';
 
 function areTwoArrayLikeEqual<T extends number[] | Float32Array | Int32Array | Uint8Array>(a: T, b:T) {
   if (a.length !== b.length) return false;
