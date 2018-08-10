@@ -6,9 +6,11 @@ import { NDView as NdArray } from '../../NdView/ndview';
 import { assert as ASSERT } from '../../utils/gadget';
 import { DataType } from "../../types";
 
+export type WebGlUnaryOpType = 'exp' | 'neg' | 'relu';
+
 export class WebGlProgramUnaryOp {
     webgl: WebGL2Driver;
-    opName: string; // TODO: enum it
+    opName: WebGlUnaryOpType; // TODO: enum it
     x: WebGLTensor;
 
     private static resultTypeMap = {
@@ -21,7 +23,7 @@ export class WebGlProgramUnaryOp {
         exp:  {float32: `return exp(v);`, int32: `return exp(float(v));`},
     }
 
-    constructor(webgl:WebGL2Driver, opName: string, x: WebGLTensor) {
+    constructor(webgl:WebGL2Driver, opName: WebGlUnaryOpType, x: WebGLTensor) {
         this.webgl = webgl;
         this.opName = opName;
         this.x = x;
@@ -134,6 +136,9 @@ void main() {
         const code = `#version 300 es
 precision highp float;
 precision highp int;
+/////////////////////////////////////
+//  UnaryOp_${this.opName}
+/////////////////////////////////////
 
 in vec2 outTex;
 uniform sampler2D X;

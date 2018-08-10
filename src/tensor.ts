@@ -143,6 +143,11 @@ export class Tensor {
         return new Tensor(ta, shape);
     }
 
+    setName(value: string): Tensor {
+        this._name = value;
+        return this;
+    }
+
     get name(): string {
         return (this._name && this._name.length > 0) ? this._name : `Tensor-${this.id}`;
     }

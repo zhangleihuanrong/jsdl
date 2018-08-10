@@ -371,6 +371,12 @@ class JsNdarrayBackend implements Backend {
     sum(x: Tensor, axises?: number[], keepDims?: boolean): Tensor {
         throw new Error("Method not implemented.");
     }
+    sub(a: Tensor, b: Tensor): Tensor {
+        throw new Error("Method not implemented.");
+    }
+    logSumExp(x: Tensor): Tensor {
+        throw new Error("Method not implemented.");
+    }
 }
 
 const backendName: string = "Backend_JSCPU";

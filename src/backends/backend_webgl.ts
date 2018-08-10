@@ -8,9 +8,10 @@ import { WebGL2Driver } from './webgl/webgl2';
 import { WebGlProgramMatMul } from './webgl/matMul';
 import { WebGlProgramConv2d } from './webgl/conv2D';
 import { WebGlProgramPad } from './webgl/padding';
-import { WebGlProgramUnaryOp } from './webgl/unaryops';
+import { WebGlProgramUnaryOp, WebGlUnaryOpType } from './webgl/unaryops';
 import { WebGlProgramSum2D } from './webgl/sum';
 import { WebGlProgramLogSumExp2D } from './webgl/logSumExp';
+import { WebGLBinaryOp, WebGLBinaryOpType } from './webgl/arithmetic';
 
 export class WebGLTensor implements BackendTensor {
   _dtype: DataType;
@@ -191,35 +192,45 @@ class WebGLBackend implements Backend {
     return null;
   }
 
+  binary_bk(opName: WebGLBinaryOpType, a: WebGLTensor, b: WebGLTensor, broadcast: boolean = true): WebGLTensor {
+    const prg = new WebGLBinaryOp(this.webgl, opName, a, b, broadcast);
+    return prg.run();
+  }
+
   add(a: Tensor, b: Tensor): Tensor {
-    return Tensor.fromBackend(this.add_bk(backendTensorOf(a), backendTensorOf(b)));
+    return Tensor.fromBackend(this.binary_bk('add', backendTensorOf(a), backendTensorOf(b)));
   }
 
-  add_bk(a: WebGLTensor, b: WebGLTensor): WebGLTensor {
-    throw new Error('Not implemented');
-  }
-
-  neg(x: Tensor): Tensor {
-    throw new Error('Not implemented');
+  sub(a: Tensor, b: Tensor): Tensor {
+    return Tensor.fromBackend(this.binary_bk('sub', backendTensorOf(a), backendTensorOf(b)));
   }
 
   multiply(a: Tensor, b: Tensor): Tensor {
-    throw new Error('Not implemented');
+    return Tensor.fromBackend(this.binary_bk('sub', backendTensorOf(a), backendTensorOf(b)));
+  }
+
+
+  /////////////////////////////////////////////////////////////////////////////////
+  //  unary operations, like neg, exp, relu...
+  /////////////////////////////////////////////////////////////////////////////////
+  unary_bk(opName: WebGlUnaryOpType, btx: WebGLTensor) : WebGLTensor {
+    const prg = new WebGlProgramUnaryOp(this.webgl, opName, btx);
+    return prg.run();
+  }
+
+  neg(x: Tensor): Tensor {
+    return Tensor.fromBackend(this.unary_bk('neg', backendTensorOf(x)));
   }
 
   relu(x: Tensor): Tensor {
-      return Tensor.fromBackend(this.relu_bk(backendTensorOf(x)));
-  }
-
-  relu_bk(btx: WebGLTensor) : WebGLTensor {
-      const prg = new WebGlProgramUnaryOp(this.webgl, 'relu', btx);
-      return prg.run();
+      return Tensor.fromBackend(this.unary_bk('relu', backendTensorOf(x)));
   }
 
   pad(x: Tensor, paddings: [number, number][]) : Tensor {
     const btp = this.pad_bk(backendTensorOf(x), paddings);
     return Tensor.fromBackend(btp);
   }
+
 
   pad_bk(x: WebGLTensor, paddings: [number, number][]) : WebGLTensor {
     let padded = x._array.pad(paddings);
@@ -270,6 +281,7 @@ class WebGLBackend implements Backend {
     return bt;
   }
 
+  // ((x - mean) / squareMatMul(variance)) * scale + bias
   batchNormalize(x: Tensor, scale: Tensor, bias: Tensor, mean: Tensor, variance: Tensor, epsilon: number, momentum: number, spatial: number): Tensor {
     throw new Error("Method not implemented.");
   }
@@ -284,13 +296,15 @@ class WebGLBackend implements Backend {
   }
   
   softmax(logits: Tensor, axis?: number): Tensor {
-    throw new Error("Method not implemented.");
+    return Tensor.fromBackend(this.softmax_bk(backendTensorOf(logits), axis));
   }
 
   softmax_bk(logits: WebGLTensor, axis?: number) : WebGLTensor {
     const logSumExp = new WebGlProgramLogSumExp2D(this.webgl, logits);
     const lse = logSumExp.run();
-    return null;
+    const x_lse = this.binary_bk('sub', logits, lse);
+    const r = this.unary_bk('exp', x_lse);
+    return r;
   }
 
   exp(x: Tensor): Tensor {
@@ -299,6 +313,15 @@ class WebGLBackend implements Backend {
 
   exp_bk(btx: WebGLTensor) : WebGLTensor {
     const prg = new WebGlProgramUnaryOp(this.webgl, 'exp', btx);
+    return prg.run();
+  }
+  
+  logSumExp(x: Tensor): Tensor {
+    return Tensor.fromBackend(this.logSumExp_bk(backendTensorOf(x)));
+  }
+
+  logSumExp_bk(btx: WebGLTensor): WebGLTensor {
+    const prg = new WebGlProgramLogSumExp2D(this.webgl, btx);
     return prg.run();
   }
 
@@ -311,6 +334,7 @@ class WebGLBackend implements Backend {
     const prg = new WebGlProgramSum2D(this.webgl, x);
     return prg.run();
   }
+
 };
 
 

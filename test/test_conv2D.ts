@@ -8,7 +8,7 @@ import { NDView as NdArray} from '../src/NdView/ndview';
 import * as tf from '../src';
 import {Tensor} from '../src';
 
-function loadTensor(url: string, shape: number[]) : Promise<Tensor> {
+export function loadTensor(url: string, shape: number[]) : Promise<Tensor> {
     return new Promise((resolve, reject) => {
         axios.request({
             responseType: 'arraybuffer',
@@ -134,16 +134,33 @@ const goldb = [ // for padding [1,1,1,1]
 ];
 
 describe("Conv2D", function() {
-    it("SUM  (int, float)", function() {
+    it("SUM (float)", function() {
         const X1 = tf.tensor([1.0, 2.0, -1.0, -2.0, -3.0, 0.0], [2, 3]);
-        tf.print(X1);
-        const sumX1 = tf.sum(X1);
-        tf.print(sumX1);
+        tf.print(X1.setName('X1'));
 
-        const iX1 = tf.tensor([1.0, 2.0, -1.0, -2.0, -3.0, 10.0], [2, 3], 'int32');
-        tf.print(iX1);
-        const sumIX1 = tf.sum(iX1);
-        tf.print(sumIX1);
+        const logSumExpX1 = tf.logSumExp(X1, [1]);
+        tf.print(logSumExpX1.setName('logSumExpX1'));
+
+        const x_logSumExp = tf.sub(X1, logSumExpX1);
+        tf.print(x_logSumExp.setName('x-logSumExp'));
+
+        const xSoftMax = tf.exp(x_logSumExp);
+        tf.print(xSoftMax.setName('xSoftMax'));
+
+        const softmaxX1Sum = tf.sum(xSoftMax);
+        tf.print(softmaxX1Sum.setName('softmaxX1Sum'));
+
+        let ta = tf.read(softmaxX1Sum);
+        assert(Math.abs(ta[0] - 1.0) < 0.001 && Math.abs(ta[1] - 1.0) < 0.001);
+
+        const dirSoftmaxX1 = tf.softmax(X1);
+        tf.print(dirSoftmaxX1.setName('directSoftMax'));
+
+        const dirSoftmaxX1Sum = tf.sum(xSoftMax);
+        tf.print(dirSoftmaxX1Sum.setName('dirSoftmaxX1Sum'));
+
+        ta = tf.read(dirSoftmaxX1Sum);
+        assert(Math.abs(ta[0] - 1.0) < 0.001 && Math.abs(ta[1] - 1.0) < 0.001);
 
     }).timeout(10000);
 
@@ -178,15 +195,15 @@ describe("Conv2D", function() {
     }).timeout(100000);
 
     it("x[1x1x4x4, k[2x1x2x2], nopadding, strides=[2,2]", function() {
-        // console.log(`===========Using backend: ${ENV.getCurrentBackendName()} ============`);
-        // testConv2D(
-        //     tf.tensor(ima, [1, 1, 4, 4]),
-        //     tf.tensor(flta, [2, 1, 2, 2]),
-        //     tf.tensor(golda, [1, 2, 2, 2]),
-        //     [0, 0, 0, 0],
-        //     [2, 2],
-        //     [1, 1]
-        // );
+        console.log(`===========Using backend: ${ENV.getCurrentBackendName()} ============`);
+        testConv2D(
+            tf.tensor(ima, [1, 1, 4, 4]),
+            tf.tensor(flta, [2, 1, 2, 2]),
+            tf.tensor(golda, [1, 2, 2, 2]),
+            [0, 0, 0, 0],
+            [2, 2],
+            [1, 1]
+        );
     });
 
     it("x[1x1x4x4, k[2x1x2x2], pad[1,1,1,1], strides=[2,2]", function() {

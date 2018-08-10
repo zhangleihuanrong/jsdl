@@ -157,6 +157,10 @@ export class WebGL2Driver {
         this.storeRef(indicesVertexObj);
     }
 
+    static getGlslTextureDataType(dtype: DataType) : 'float' | 'int' {
+        return (dtype == 'float32') ? 'float' : 'int';
+    }
+
     create2DGLTexture(data: TypedArray, texShape: [number, number], dtype: DataType): WebGLTexture {
         const gl = this._glContext;
         const texture = gl.createTexture();

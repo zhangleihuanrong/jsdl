@@ -34,6 +34,10 @@ export interface Backend extends TensorManager{
 
     add(a: Tensor, b: Tensor): Tensor;
 
+    sub(a: Tensor, b: Tensor) : Tensor;
+
+    logSumExp(x: Tensor) : Tensor;
+
     // return A * B * alpha + bias * beta, where A=(transposeA)?a':a, silimar to B
     // A => [M, K], B: [K, N], bias: castable[M, N]
     gemm(a: Tensor, b: Tensor, bias?: Tensor, alpha?: number, beta?: number, transposeA?: boolean, transposeB?: boolean) : Tensor;

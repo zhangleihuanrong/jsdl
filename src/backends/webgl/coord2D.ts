@@ -70,7 +70,7 @@ export class CoordinateMapping {
     static glslGet(x: WebGLTensor, name: string, functionPrefix = 'get'): string {
         const nda = x._array;
 
-        const glslTexValueType = (x._dtype == 'float32') ? 'float' : (x._dtype == 'int32') ? 'int' : 'uint';
+        const glslTexValueType = (x._dtype == 'float32') ? 'float' : 'int';
         const codes: string[] = [`${glslTexValueType} ${functionPrefix}${name}(`];
         for (let i = 0; i < nda.shape.length; ++i) {
             codes.push((i > 0) ? `, int i${i}` : `int i${i}`);

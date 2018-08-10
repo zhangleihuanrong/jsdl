@@ -44,3 +44,7 @@ export function getBroadcastRepeats(bcTo: number[],  bcFrom: number[]) : number[
     const repeats = bcTo.map((v, i) => (v > bcFrom[i]) ? v : 1);
     return (repeats.every(v => v == 1)) ? null : repeats;
 }
+
+export function areShapesEqual(shapeA: number[], shapeB: number[]) : boolean {
+    return (shapeA.length == shapeB.length && shapeA.every((v, i) => v === shapeB[i]));
+}
