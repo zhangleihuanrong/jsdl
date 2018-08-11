@@ -133,7 +133,18 @@ const goldb = [ // for padding [1,1,1,1]
     +1.0, -1.0, +0.0
 ];
 
-describe("Conv2D", function() {
+describe("Operators", function() {
+    it("Reshape (float)", function() {
+        const X1 = tf.tensor([1.0, 2.0, -1.0, -2.0, -3.0, 0.0], [2, 3]);
+        tf.print(X1.setName('X1'));
+
+        const transX1 = tf.transpose(X1, [1, 0]);
+        tf.print(transX1.setName('transX1'));
+
+        const reshapeX1 = tf.reshape(transX1, [1, -1, 6]);
+        tf.print(reshapeX1.setName('reshapeX1'));
+    });
+
     it("SUM (float)", function() {
         const X1 = tf.tensor([1.0, 2.0, -1.0, -2.0, -3.0, 0.0], [2, 3]);
         tf.print(X1.setName('X1'));

@@ -2,7 +2,7 @@ import { Backend } from '../backend';
 import { ENV } from '../environments';
 import { NDView as NdArray } from '../NdView/ndview';
 import { Tensor } from '../tensor';
-import { BackendTensor, DataType, Shape, TypedArray } from '../types';
+import { BackendTensor, DataType, TypedArray } from '../types';
 import { assert as ASSERT } from '../utils/gadget';
 import { WebGL2Driver } from './webgl/webgl2';
 import { WebGlProgramMatMul } from './webgl/matMul';
@@ -12,6 +12,7 @@ import { WebGlProgramUnaryOp, WebGlUnaryOpType } from './webgl/unaryops';
 import { WebGlProgramSum2D } from './webgl/sum';
 import { WebGlProgramLogSumExp2D } from './webgl/logSumExp';
 import { WebGLBinaryOp, WebGLBinaryOpType } from './webgl/arithmetic';
+import { WebGlReshapeOp } from './webgl/reshape';
 
 export class WebGLTensor implements BackendTensor {
   _dtype: DataType;
@@ -87,12 +88,6 @@ export class WebGLTensor implements BackendTensor {
   DumpDataFromGPU(webgl: WebGL2Driver): TypedArray {
       ASSERT(this._texture != null, "GPU data not exists!");
       return webgl.DumpTexture(this._texture, this._texShape, this._array.dataLen, this._dtype);
-  }
-
-  // This read array in new layout, i.e., only coreShape/coreStride. Other fields are 0 or null or default.
-  ReadFromGPU(webgl: WebGL2Driver): TypedArray {
-    // TODO:
-    return null;
   }
 
   get shape(): number[] {
@@ -176,7 +171,7 @@ class WebGLBackend implements Backend {
     return Tensor.fromBackend(prg.run());
   }
 
-  reshape(x: Tensor, newShape: Shape): Tensor {
+  reshape(x: Tensor, newShape: number[]): Tensor {
     const bt = backendTensorOf(x);
     let ndarr = bt._array.reshape(newShape);
     if (ndarr) {
@@ -185,11 +180,13 @@ class WebGLBackend implements Backend {
       }
       return Tensor.fromBackend(new WebGLTensor(ndarr, bt._dtype));
     }
-    // // do it cpu currently, could do it in GPU later. 
-    // bt.DumpDataFromGPU(this.webgl);
-    // ndarr = bt._array.reshape(newShape);
-    // return Tensor.fromBackend(new WebGLTensor(ndarr, bt._dtype));
-    return null;
+
+    return Tensor.fromBackend(this.reshape_bk(backendTensorOf(x), newShape));
+  }
+
+  reshape_bk(btx: WebGLTensor, newShape: number[]) : WebGLTensor {
+    const prg = new WebGlReshapeOp(this.webgl, btx, newShape);
+    return prg.run();
   }
 
   binary_bk(opName: WebGLBinaryOpType, a: WebGLTensor, b: WebGLTensor, broadcast: boolean = true): WebGLTensor {

@@ -159,6 +159,23 @@ export class GlslCodeUtil {
         return codes.join('');
     }
 
+    static pureOffset2Indices(
+            shape: number[], offsetName: string, 
+            indexPrefix: string = 'index_', indent: string = '    ') : string {
+        const stride: number[] = shape.map(v => 1);
+        for (let i = shape.length - 2; i >= 0; --i) {
+            stride[i] = shape[i+1] * stride[i+1];
+        }
+
+        const lines : string[] = [''];
+        const rank = shape.length;
+        for (let i = 0; i < rank; ++i) {
+            lines.push(`${indent}int ${indexPrefix}${i} = int(${offsetName} / ${stride[i]});`);
+            lines.push(`${indent}${offsetName} -= int(${indexPrefix}${i} * ${stride[i]});`);
+        }
+        return lines.join('\n');
+    }
+
     static argList(argCount: number, indexNames: string|string[] = 'idx_', ...replaces: [number, string][]) : string {
         if (!Array.isArray(indexNames)) {
             indexNames = new Array(argCount).fill(indexNames);
@@ -177,6 +194,4 @@ export class GlslCodeUtil {
     static snippetGet2D(texName: string, y = 'i0', x = 'i1'): string {
         return `texelFetch(${name}, ivec2(${x}, ${y}), 0).r`;
     }
-
-
 }

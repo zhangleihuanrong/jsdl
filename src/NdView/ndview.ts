@@ -446,7 +446,7 @@ export class NDView {
         ASSERT(numberOfNeg1 <= 1, "At most one -1 could be used in reshape!");
         let ns = Math.abs(shape.reduce((m, v) => m*v, 1));
         if (numberOfNeg1 == 1) {
-            ASSERT(this.size % ns == 0, "-1 can not find matching size during reshape");
+            ASSERT(this.size % ns === 0, "-1 can not find matching size during reshape");
             const w = Math.ceil(this.size / ns);
             shape = shape.map(v => (v == -1)? w : v);
             ns = ns * w;

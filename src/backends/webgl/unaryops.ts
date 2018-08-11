@@ -6,6 +6,8 @@ import { NDView as NdArray } from '../../NdView/ndview';
 import { assert as ASSERT } from '../../utils/gadget';
 import { DataType } from "../../types";
 
+// Unary Op generate result of same shape as input, and 
+// elemetal wise function could be used to get result from same location.
 export type WebGlUnaryOpType = 'exp' | 'neg' | 'relu';
 
 export class WebGlProgramUnaryOp {
