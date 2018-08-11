@@ -80,6 +80,9 @@ export class GlslCodeUtil {
         if (nda.shape.length == 2 && nda.isOriginalCore() && nda.shape[0] == x._texShape[1] && nda.shape[1] == x._texShape[0]) {
             codes.push(`  return texelFetch(${name}, ivec2(i1, i0), 0).r;\n`);
         }
+        else if (nda.shape.length == 0) {
+            codes.push(`  return texelFetch(${name}, ivec2(0, 0), 0).r;\n`);
+        }
         else {
             // handle repeat/padding/gather logic if needed
             for (let i = 0; i < nda.shape.length; ++i) {

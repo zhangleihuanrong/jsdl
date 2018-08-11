@@ -13,6 +13,7 @@ import { WebGlProgramSum2D } from './webgl/sum';
 import { WebGlProgramLogSumExp2D } from './webgl/logSumExp';
 import { WebGLBinaryOp, WebGLBinaryOpType } from './webgl/arithmetic';
 import { WebGlReshapeOp } from './webgl/reshape';
+import { WebGlOpBatchNormalize } from './webgl/batchNormalize';
 
 export class WebGLTensor implements BackendTensor {
   _dtype: DataType;
@@ -264,9 +265,20 @@ class WebGLBackend implements Backend {
     return prg.run();
   }
 
-  // ((x - mean) / squareMatMul(variance)) * scale + bias
-  batchNormalize(x: Tensor, scale: Tensor, bias: Tensor, mean: Tensor, variance: Tensor, epsilon: number, momentum: number, spatial: number): Tensor {
-    throw new Error("Method not implemented.");
+  // ((x - mean) / squareRoot(variance)) * scale + bias
+  batchNormalize(
+          x: Tensor, scale: Tensor, bias: Tensor, mean: Tensor, variance: Tensor, 
+          epsilon: number, momentum: number, spatial: number): Tensor {
+    return Tensor.fromBackend(this.batchNormalize_bk(
+      backendTensorOf(x), backendTensorOf(scale), backendTensorOf(bias), backendTensorOf(mean), backendTensorOf(variance),
+      epsilon, momentum, spatial
+    ));
+  }
+  batchNormalize_bk(
+          x: WebGLTensor, scale: WebGLTensor, bias: WebGLTensor, mean: WebGLTensor, variance: WebGLTensor, 
+          epsilon: number, momentum: number, spatial: number): WebGLTensor {
+    const bn = new WebGlOpBatchNormalize(this.webgl, x, scale, bias, mean, variance, epsilon, momentum, spatial);
+    return bn.run();
   }
   maxPool(x: Tensor, kernelShape: number[], strides: number[], pads: number[], storageOrder: number): Tensor {
     throw new Error("Method not implemented.");

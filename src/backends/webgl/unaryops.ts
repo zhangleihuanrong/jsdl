@@ -8,7 +8,8 @@ import { DataType } from "../../types";
 
 // Unary Op generate result of same shape as input, and 
 // elemetal wise function could be used to get result from same location.
-export type WebGlUnaryOpType = 'exp' | 'neg' | 'relu';
+// no other attributes???
+export type WebGlUnaryOpType = 'exp' | 'neg' | 'relu' | 'sqrt';
 
 export class WebGlProgramUnaryOp {
     webgl: WebGL2Driver;
@@ -17,12 +18,14 @@ export class WebGlProgramUnaryOp {
 
     private static resultTypeMap = {
         exp:  {float: 'float' , int: 'float'},
+        sqrt:  {float: 'float' , int: 'float'},
     }
 
     private static snippets = {
         relu: {float32: 'return (v > 0.0) ? v : 0.0;', int32 : 'return (v > 0) ? v : 0;'},
         neg:  {float32: 'return -v;', int32 : 'return -v;'},
         exp:  {float32: `return exp(v);`, int32: `return exp(float(v));`},
+        sqrt:  {float32: `return sqrt(v);`, int32: `return sqrt(float(v));`},
     }
 
     constructor(webgl:WebGL2Driver, opName: WebGlUnaryOpType, x: WebGLTensor) {

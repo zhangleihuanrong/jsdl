@@ -21,7 +21,7 @@ module.exports = function (config) {
         // list of files / patterns to load in the browser
         files: [
             'src/**/*.ts',
-            'test/test_conv2D.ts',
+            'test/test_current.ts',
             { pattern: 'testdata/*.buf', watched: false, included: false, served: true, nocache: false }
         ],
 
@@ -36,7 +36,7 @@ module.exports = function (config) {
         // available preprocessors: https://npmjs.org/browse/keyword/karma-preprocessor
         preprocessors: {
             'src/**/*.ts': ['karma-typescript'],
-            'test/test_conv2D.ts': ['karma-typescript']
+            'test/test_current.ts': ['karma-typescript']
         },
 
         karmaTypescriptConfig: {
