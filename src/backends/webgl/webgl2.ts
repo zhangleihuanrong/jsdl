@@ -1,5 +1,6 @@
 import { DataType, TypedArray } from '../../types';
 import { assert as ASSERT } from '../../utils/gadget';
+import { WebGLTensor } from '../backend_webgl';
 //import { NDView as NdArray } from '../../NdView/ndview'
 
 const vertexShaderSource = `#version 300 es
@@ -15,10 +16,15 @@ void main () {
 }
 `;
 
-export type UniformParameter = {
+export type UniformProgramInfo = {
     name: string,
     dtype: DataType,
     value: number | number[]
+};
+
+export type TextureProgramInfo = {
+  name: string,
+  tensor: WebGLTensor,
 };
 
 export class WebGL2Driver {
@@ -211,7 +217,7 @@ export class WebGL2Driver {
         }
     }
 
-    bindUniforms(program: WebGLProgram, uniforms: UniformParameter[]) {
+    bindUniforms(program: WebGLProgram, uniforms: UniformProgramInfo[]) {
         if (uniforms) {
             const gl = this._glContext;
             uniforms.forEach(({ value, dtype, name }) => {
@@ -237,18 +243,16 @@ export class WebGL2Driver {
     }
 
 
-    bindInputTextures(program: WebGLProgram, inTextures: { name: string, texture: WebGLTexture }[]) {
+    bindInputTextures(program: WebGLProgram, inTextures: TextureProgramInfo[]) {
         const gl = this._glContext;
-
-        inTextures.forEach(({ name, texture }, i) => {
+        inTextures.forEach(({ name, tensor }, i) => {
             gl.activeTexture(gl.TEXTURE0 + i);
-            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.bindTexture(gl.TEXTURE_2D, tensor._texture);
             gl.uniform1i(gl.getUniformLocation(program, name), i);
-        }
-        );
+        });
     }
 
-
+    
     getWebGLErrorMessage(status: number): string {
       const gl = this._glContext;
       switch (status) {
@@ -274,8 +278,8 @@ export class WebGL2Driver {
     runProgram(program: WebGLProgram,
         outTexture: WebGLTexture,
         outTexShape: [number, number], // [W, H]
-        inTextures: { name: string, texture: WebGLTexture }[],
-        uniforms: UniformParameter[]) {
+        inTextures: TextureProgramInfo[],
+        uniforms: UniformProgramInfo[]) {
 
         const gl = this._glContext;
         gl.useProgram(program);
@@ -295,11 +299,6 @@ export class WebGL2Driver {
         if (error !== gl.NO_ERROR) {
           throw new Error('WebGL Error: ' + this.getWebGLErrorMessage(error));
         }
-
-        // Just read one pixel
-        // const len = 4;
-        // const rgbaData: TypedArray = new Float32Array(len);
-        // gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, rgbaData);
 
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         gl.deleteFramebuffer(frameBuffer);

@@ -257,10 +257,10 @@ class JsNdarrayBackend implements Backend {
     conv2d(
         x: Tensor,
         filter: Tensor,
-        strides: number | [number, number],
+        strides: number | number[],
         padding: number[],
         dataFormat: 'NHWC' | 'NCHW',
-        dilations: number | [number, number] = [1, 1],
+        dilations: number | number[] = [1, 1],
         groups: number = 1,
         bias: Tensor = null): Tensor {
 

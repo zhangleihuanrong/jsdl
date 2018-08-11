@@ -3,7 +3,7 @@ import { DataType } from '../../types';
 
 
 // Generate glsl code for coordinate mapping, get texture value for Tensor
-export class CoordinateMapping {
+export class GlslCodeUtil {
 
     // generate code to handle normal case, where shape/strides information are passed by attributes:
     //    uniform int ${name}Shape[rank];

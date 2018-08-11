@@ -67,7 +67,7 @@ function testConv2D(
     console.log(`----------padding:${padding}, strides:${strides}, dilations:${dilations}`);
         
     let r: Tensor = null;
-    const rounds = 1;
+    const rounds = 6;
     const start =  Date.now();
     for (let rep=0; rep < rounds; ++rep) {
         const itStart =  Date.now();
@@ -78,7 +78,7 @@ function testConv2D(
     }
     const millis = Date.now() - start;
     const avgMillis = millis / rounds;
-    console.log(`  --Total: ${millis}ms, avg:${avgMillis}ms`);
+    console.log(`  --Total: ${millis}ms in ${rounds} iterations, avg:${avgMillis}ms`);
 
     goldenResult.name = `GoldConv2DResult${goldenResult.id}`;
     tf.print(goldenResult, number2string, lastAxisExclude, otherAxisExclude);
@@ -174,24 +174,24 @@ describe("Conv2D", function() {
     }).timeout(10000);
 
     it("x[1x3x224x224, k[64x3x7x7], pad[3,3,3,3], strides=[2,2]", async function() {
-        // console.log(`===========Using backend: ${ENV.getCurrentBackendName()} ============`);
-        // console.log('Downloading imageInput.buf...');
-        // const pX = await loadTensor("./testdata/imageInput.buf", [1, 3, 224, 224]);
-        // console.log('Downloading filter.buf...');
-        // const pF = await loadTensor("./testdata/filter.buf", [64, 3, 7, 7]);
-        // console.log('Downloading goldresult...');
-        // const pGold = await loadTensor("./testdata/convResult.buf", [1, 64, 112, 112]);
-        // console.log('start n-time conv2d...');
+        console.log(`===========Using backend: ${ENV.getCurrentBackendName()} ============`);
+        console.log('Downloading imageInput.buf...');
+        const pX = await loadTensor("./testdata/imageInput.buf", [1, 3, 224, 224]);
+        console.log('Downloading filter.buf...');
+        const pF = await loadTensor("./testdata/filter.buf", [64, 3, 7, 7]);
+        console.log('Downloading goldresult...');
+        const pGold = await loadTensor("./testdata/convResult.buf", [1, 64, 112, 112]);
+        console.log('start n-time conv2d...');
 
-        // testConv2D(
-        //     pX, pF, pGold,
-        //     [3, 3, 3, 3],
-        //     [2, 2],
-        //     [1, 1],
-        //     (x: number) => x.toFixed(7),
-        //     [5, -3],
-        //     [2, -1]
-        // );
+        testConv2D(
+            pX, pF, pGold,
+            [3, 3, 3, 3],
+            [2, 2],
+            [1, 1],
+            (x: number) => x.toFixed(7),
+            [5, -3],
+            [2, -1]
+        );
     }).timeout(100000);
 
     it("x[1x1x4x4, k[2x1x2x2], nopadding, strides=[2,2]", function() {

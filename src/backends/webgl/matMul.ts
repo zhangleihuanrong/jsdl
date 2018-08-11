@@ -1,6 +1,6 @@
 import { WebGLTensor } from "../backend_webgl";
 import { WebGL2Driver } from "./webgl2";
-import { CoordinateMapping } from './coord2D';
+import { GlslCodeUtil } from './glslCodeUtil';
 
 import { NDView as NdArray } from '../../NdView/ndview';
 import { assert as ASSERT } from '../../utils/gadget';
@@ -67,17 +67,17 @@ uniform sampler2D A;
 uniform sampler2D B;
 out vec4 outColor;
 
-${CoordinateMapping.glslGet(A, 'A')}
+${GlslCodeUtil.glslGet(A, 'A')}
 
-${CoordinateMapping.glslGet(B, 'B')}
+${GlslCodeUtil.glslGet(B, 'B')}
 
 void main() {
-    ${CoordinateMapping.snippetLogicFormST(C, 'C', 'idx_', 'outTex', '    ')}
+    ${GlslCodeUtil.snippetLogicFormST(C, 'C', 'idx_', 'outTex', '    ')}
 
     float sum = 0.0;
     for (int k = 0; k < ${commonDim}; ++k) {  // length of the common axis
-        float a = getA(${CoordinateMapping.argList(rankC, 'idx_', [rankC-1, 'k'])});
-        float b = getB(${CoordinateMapping.argList(rankC, 'idx_', [rankC-2, 'k'])});
+        float a = getA(${GlslCodeUtil.argList(rankC, 'idx_', [rankC-1, 'k'])});
+        float b = getB(${GlslCodeUtil.argList(rankC, 'idx_', [rankC-2, 'k'])});
         sum += (a * b);
     }
 
@@ -95,7 +95,7 @@ void main() {
             program,
             C._texture,
             C._texShape,
-            [{ name: 'A', texture: A._texture }, { name: 'B', texture: B._texture }], 
+            [{ name: 'A', tensor: A}, { name: 'B', tensor: B}], 
             null);
 
         return C;

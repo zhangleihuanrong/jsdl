@@ -6,7 +6,7 @@ import { BackendTensor, DataType, Shape, TypedArray } from '../types';
 import { assert as ASSERT } from '../utils/gadget';
 import { WebGL2Driver } from './webgl/webgl2';
 import { WebGlProgramMatMul } from './webgl/matMul';
-import { WebGlProgramConv2d } from './webgl/conv2D';
+import { WebGlProgramConv2d } from './webgl/convolution';
 import { WebGlProgramPad } from './webgl/padding';
 import { WebGlProgramUnaryOp, WebGlUnaryOpType } from './webgl/unaryops';
 import { WebGlProgramSum2D } from './webgl/sum';
@@ -241,44 +241,30 @@ class WebGLBackend implements Backend {
     return new WebGLTensor(padded, x._dtype, x._texture, x._texShape);
   }
 
-  conv2d(
-    x: Tensor, filter: Tensor, strides: number | [number, number],
-    padding: number[], dataFormat: 'NHWC' | 'NCHW',  dilations: number | [number, number],
-    groups: number = 1, bias: Tensor = null): Tensor {
-      const br = this.conv2d_bk(backendTensorOf(x), backendTensorOf(filter), strides, padding, 
-          dataFormat, dilations, groups, bias);
+  conv2d(x: Tensor, filter: Tensor, strides: number | number[],
+         padding: number[], dataFormat: 'NHWC' | 'NCHW',  dilations: number | number[],
+         groups: number = 1, bias: Tensor = null): Tensor {
+      ASSERT(dataFormat == 'NCHW', ' Currently only support NCHW used in onnx');
+      ASSERT(x.shape.length >= 3, 'input tensor dimensions too small');
+      const spatialShape = x.shape.slice(2);
+      if (!Array.isArray(strides)) strides = spatialShape.map(v => strides as number);
+      if (!Array.isArray(dilations)) dilations = spatialShape.map(v => dilations as number);
+
+      const br = this.conv2d_bk(
+          backendTensorOf(x), backendTensorOf(filter), backendTensorOf(bias),
+          strides, padding, dilations, groups, dataFormat);
       return Tensor.fromBackend(br);
   }
 
   // btx: [N, C, H, W] or [N, H, W, C]
   // btk: [H, W, in, out] or [out, in, H, W]
-  conv2d_bk(
-    btx: WebGLTensor, btk: WebGLTensor, strides: number | [number, number],
-    padding: number[], dataFormat: 'NHWC' | 'NCHW',  dilations: number | [number, number],
-    groups: number = 1, bias: Tensor = null): WebGLTensor {
+  conv2d_bk(btx: WebGLTensor, btk: WebGLTensor, bias: WebGLTensor, 
+            strides: number[], padding: number[],  dilations: number[], groups: number = 1, 
+            dataFormat: 'NHWC' | 'NCHW'): WebGLTensor {
 
-    ASSERT(btx.shape.length == 4 && btk.shape.length == 4, "Shape error input image or kernel");
-    if (!(strides instanceof Array)) strides = [strides as number, strides as number];
-    if (!(dilations instanceof Array)) dilations = [dilations as number, dilations as number];
-    if (padding == null) padding = [0, 0, 0, 0];
-    ASSERT(padding.length == 4 && padding.every(v => v >= 0 && (v == (v|0))), "padding values is wrong!");
+    const prg = new WebGlProgramConv2d(this.webgl, btx, btk, bias, strides, padding, dilations, groups);
 
-    if (dataFormat == 'NCHW') {
-      btx = btx.transpose([0, 2, 3, 1]);
-      btk = btk.transpose([2, 3, 1, 0]);
-    }
-
-    const prg = new WebGlProgramConv2d(
-      this.webgl, btx, btk, padding,
-      strides, dilations, groups, 
-      backendTensorOf(bias));
-
-    let bt = prg.run();
-
-    if (dataFormat == 'NCHW') {
-      bt = bt.transpose([0, 3, 1, 2]);
-    }
-    return bt;
+    return prg.run();
   }
 
   // ((x - mean) / squareMatMul(variance)) * scale + bias

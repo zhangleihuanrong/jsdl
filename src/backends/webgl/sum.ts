@@ -1,6 +1,6 @@
 import { WebGLTensor } from "../backend_webgl";
 import { WebGL2Driver } from "./webgl2";
-import { CoordinateMapping } from './coord2D';
+import { GlslCodeUtil } from './glslCodeUtil';
 
 import { NDView as NdArray } from '../../NdView/ndview';
 import { assert as ASSERT, simpleHash32 } from '../../utils/gadget';
@@ -45,10 +45,10 @@ uniform sampler2D X;
 
 out vec4 outColor;
 
-${CoordinateMapping.glslGet(X, 'X')}
+${GlslCodeUtil.glslGet(X, 'X')}
 
 void main() {
-    ${CoordinateMapping.snippetLogicFormST(Y, 'Y', ['batchId', 'ReducedId'], 'outTex', '    ')}
+    ${GlslCodeUtil.snippetLogicFormST(Y, 'Y', ['batchId', 'ReducedId'], 'outTex', '    ')}
 
     ${this.outValueType} r = ${initVale};
     for (int i = 0; i < ${N}; ++i) {
@@ -83,7 +83,7 @@ void main() {
              prg,
              Y._texture,
              Y._texShape,
-             [{name: 'X', texture: this.x._texture}],
+             [{name: 'X', tensor: this.x}],
              null
         );
 

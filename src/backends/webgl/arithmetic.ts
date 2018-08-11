@@ -1,6 +1,6 @@
 import { WebGLTensor } from "../backend_webgl";
 import { WebGL2Driver } from "./webgl2";
-import { CoordinateMapping } from './coord2D';
+import { GlslCodeUtil } from './glslCodeUtil';
 
 import { NDView as NdArray } from '../../NdView/ndview';
 import { assert as ASSERT, simpleHash32 } from '../../utils/gadget';
@@ -81,15 +81,15 @@ uniform sampler2D A;
 uniform sampler2D B;
 out vec4 outColor;
 
-${CoordinateMapping.glslGet(A, 'A')}
+${GlslCodeUtil.glslGet(A, 'A')}
 
-${CoordinateMapping.glslGet(B, 'B')}
+${GlslCodeUtil.glslGet(B, 'B')}
 
 void main() {
-    ${CoordinateMapping.snippetLogicFormST(C, 'C', 'idx_', 'outTex', '    ')}
+    ${GlslCodeUtil.snippetLogicFormST(C, 'C', 'idx_', 'outTex', '    ')}
 
-    ${castGlDataType} a = ${castGlDataType}(getA(${CoordinateMapping.argList(rank, 'idx_')}));
-    ${castGlDataType} b = ${castGlDataType}(getB(${CoordinateMapping.argList(rank, 'idx_')}));
+    ${castGlDataType} a = ${castGlDataType}(getA(${GlslCodeUtil.argList(rank, 'idx_')}));
+    ${castGlDataType} b = ${castGlDataType}(getB(${GlslCodeUtil.argList(rank, 'idx_')}));
 
     ${outGlDataType} c = ${opCodeSnippet};
 
@@ -120,7 +120,7 @@ void main() {
              prg,
              C._texture,
              C._texShape,
-             [{name: 'A', texture: this.a._texture}, {name: 'B', texture: this.b._texture}],
+             [{name: 'A', tensor: this.a}, {name: 'B', tensor: this.b}],
              null
         );
 

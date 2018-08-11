@@ -11,10 +11,10 @@ export interface Backend extends TensorManager{
     conv2d(
         x: Tensor, 
         filter: Tensor,
-        strides: number | [number, number], 
+        strides: number | number[], 
         padding: number[], 
-        dataFormat: 'NHWC' | 'NCHW', 
-        dialations: number | [number, number],
+        dataFormat: 'NHWC' | 'NCHW',
+        dialations: number | number[],
         groups: number,
         bias: Tensor) : Tensor;
     

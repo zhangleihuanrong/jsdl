@@ -1,6 +1,6 @@
 import { WebGLTensor } from "../backend_webgl";
-import { WebGL2Driver, UniformParameter } from "./webgl2";
-import { CoordinateMapping } from './coord2D';
+import { WebGL2Driver, UniformProgramInfo } from "./webgl2";
+import { GlslCodeUtil } from './glslCodeUtil';
 
 import { NDView as NdArray } from '../../NdView/ndview';
 import { assert as ASSERT } from '../../utils/gadget';
@@ -39,7 +39,7 @@ export class WebGlProgramUnaryOp {
         const Y = new WebGLTensor(new NdArray(null, this.x.shape), (resultType == 'int') ? 'int32':'float32');
         Y.PrepareGpuData(this.webgl);
 
-        const uniforms : UniformParameter[] = [
+        const uniforms : UniformProgramInfo[] = [
             { name: 'XShape', dtype : 'int32', value: this.x._array.coreShape},
             { name: 'XStride', dtype : 'int32', value: this.x._array.coreStride},
             { name: 'XOffsetTexWTexY', dtype : 'int32', value: [this.x._array.coreOffset, this.x._texShape[0], this.x._texShape[1]]},
@@ -52,7 +52,7 @@ export class WebGlProgramUnaryOp {
             program,
             Y._texture,
             Y._texShape,
-            [{ name: 'X', texture: this.x._texture }],
+            [{ name: 'X', tensor: this.x}],
             uniforms);
 
         return this.genCodeAndRun(this.x, this.opName);
@@ -96,16 +96,16 @@ uniform int YOffsetTexWTexY[3];
 
 out vec4 outColor;
 
-${CoordinateMapping.glslGet(X, 'X')}
+${GlslCodeUtil.glslGet(X, 'X')}
 
 ${resultType} getResultOn(${valueType} v) {
     ${WebGlProgramUnaryOp.snippets[this.opName][dtype]}
 }
 
 void main() {
-    ${CoordinateMapping.generalOutputIndexFormST(rank, 'Y', 'idx_', 'outTex', '    ')}
+    ${GlslCodeUtil.generalOutputIndexFormST(rank, 'Y', 'idx_', 'outTex', '    ')}
 
-    ${valueType} v = getX(${CoordinateMapping.argList(rank, 'idx_')});
+    ${valueType} v = getX(${GlslCodeUtil.argList(rank, 'idx_')});
     v = getResultOn(v);
     outColor = vec4(v, 0.0, 0.0, 0.0);
 }
@@ -144,16 +144,16 @@ in vec2 outTex;
 uniform sampler2D X;
 out vec4 outColor;
 
-${CoordinateMapping.glslGet(X, 'X')}
+${GlslCodeUtil.glslGet(X, 'X')}
 
 ${resultType} getResultOn(${valueType} v) {
     ${WebGlProgramUnaryOp.snippets[this.opName][dtype]}
 }
 
 void main() {
-    ${CoordinateMapping.snippetLogicFormST(Y, 'Y', 'idx_', 'outTex', '    ')}
+    ${GlslCodeUtil.snippetLogicFormST(Y, 'Y', 'idx_', 'outTex', '    ')}
 
-    ${valueType} v = getX(${CoordinateMapping.argList(rankC, 'idx_')});
+    ${valueType} v = getX(${GlslCodeUtil.argList(rankC, 'idx_')});
     v = getResultOn(v);
     outColor = vec4(v, 0.0, 0.0, 0.0);
 }
@@ -169,7 +169,7 @@ void main() {
             program,
             Y._texture,
             Y._texShape,
-            [{ name: 'X', texture: X._texture }], 
+            [{ name: 'X', tensor: X}], 
             null);
 
         this.webgl._glContext.deleteProgram(program);
