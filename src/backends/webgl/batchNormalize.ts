@@ -44,7 +44,7 @@ export class WebGlOpBatchNormalize extends WebGlBaseProgram {
         this.sqrtVar = sqrtOp.run();
         const fa = new Float32Array([this.epsilon]);
         const epsilonT = new WebGLTensor(new NdArray(fa, [1]), 'float32');
-        const maxOp = new WebGLBinaryOp(this.webgl, 'max', this.sqrtVar, epsilonT);
+        const maxOp = new WebGLBinaryOp(this.webgl, 'max', this.sqrtVar, epsilonT.MoveDataToGpu(this.webgl));
         this.sqrtVar = maxOp.run();
 
         this.y = new WebGLTensor(new NdArray(null, this.x.shape), this.x._dtype);
