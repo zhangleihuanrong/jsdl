@@ -14,6 +14,7 @@ import { WebGlProgramLogSumExp2D } from './webgl/logSumExp';
 import { WebGLBinaryOp, WebGLBinaryOpType } from './webgl/arithmetic';
 import { WebGlReshapeOp } from './webgl/reshape';
 import { WebGlOpBatchNormalize } from './webgl/batchNormalize';
+import { PoolingType, WebGlPoolingOp } from './webgl/pooling';
 
 export class WebGLTensor implements BackendTensor {
   _dtype: DataType;
@@ -204,7 +205,7 @@ class WebGLBackend implements Backend {
   }
 
   multiply(a: Tensor, b: Tensor): Tensor {
-    return Tensor.fromBackend(this.binary_bk('sub', backendTensorOf(a), backendTensorOf(b)));
+    return Tensor.fromBackend(this.binary_bk('mul', backendTensorOf(a), backendTensorOf(b)));
   }
 
 
@@ -274,17 +275,26 @@ class WebGLBackend implements Backend {
       epsilon, momentum, spatial
     ));
   }
+
   batchNormalize_bk(
           x: WebGLTensor, scale: WebGLTensor, bias: WebGLTensor, mean: WebGLTensor, variance: WebGLTensor, 
           epsilon: number, momentum: number, spatial: number): WebGLTensor {
     const bn = new WebGlOpBatchNormalize(this.webgl, x, scale, bias, mean, variance, epsilon, momentum, spatial);
     return bn.run();
   }
-  maxPool(x: Tensor, kernelShape: number[], strides: number[], pads: number[], storageOrder: number): Tensor {
-    throw new Error("Method not implemented.");
+  pooling_bk(poolingType: PoolingType, x: WebGLTensor, kernelShape: number[], strides: number[], 
+             pads: number[], countIncludePadding: boolean) : WebGLTensor {
+    const pool = new WebGlPoolingOp(this.webgl, poolingType, x, kernelShape, strides, pads, countIncludePadding);
+    return pool.run();
   }
-  averagePool(x: Tensor, kernelShape: number[], strides: number[], pads: number[], count_in_pad: number): Tensor {
-    throw new Error("Method not implemented.");
+
+  maxPool(x: Tensor, kernelShape: number[], strides: number[], pads: number[], storageOrder: number): Tensor {
+    const bt = this.pooling_bk('max', backendTensorOf(x), kernelShape, strides, pads, false);
+    return Tensor.fromBackend(bt);
+  }
+  averagePool(x: Tensor, kernelShape: number[], strides: number[], pads: number[], countIncludePadding: number): Tensor {
+    const bt = this.pooling_bk('average', backendTensorOf(x), kernelShape, strides, pads, countIncludePadding != 0);
+    return Tensor.fromBackend(bt);
   }
   gemm(a: Tensor, b: Tensor, bias?: Tensor, alpha?: number, beta?: number, transposeA?: boolean, transposeB?: boolean): Tensor {
     throw new Error("Method not implemented.");
