@@ -109,7 +109,7 @@ export class Tensor {
             ta[i] = start;
             start += step;
         }
-        return new Tensor(ta, null, dtype);
+        return new Tensor(ta, [len], dtype);
     }
 
     static oneHot(indices: Tensor|Int32Array|number[], depth: number = -1, onValue: number = 1, offValue: number = 0): Tensor {

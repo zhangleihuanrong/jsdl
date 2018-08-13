@@ -58,31 +58,38 @@ export class WebGlPoolingOp extends WebGlBaseProgram {
         const xSpatialShape = this.x.shape.slice(2);
         const kernelPointCount = this.kernelShape.reduce((m, v) => m * v, 1);
 
-        const snippetOnZero = (this.poolingType == 'average') ? '' : 'if (r < 0.0) { r = 0.0; }';
+        const snippetOnPadding = (this.poolingType == 'average') ? '' : 'if (r < 0.0) { r = 0.0; }';
         const snippetOnValue = (this.poolingType == 'average') ? 'r += valX;' : 'if (r < valX) { r = valX; }';
 
         const initValueSnippet = (this.poolingType == 'average') ? '0.0' : 'float(-1.0 / 0.0)';
         const codeLines: string[] = [];
-        let indent = '    ';
 
+        if (this.poolingType == 'average'&& !this.countIncludePadding) {
+            codeLines.push(`int count = 1;`);
+        }
+        codeLines.push(``);
+        let indent = '    ';
         for (let i = 2; i < rank; ++i) {
           codeLines.push(`${indent}int x_${i}B = y_${i} * ${this.strides[i-2]} - ${this.paddings[i-2]};`);
-          codeLines.push(`${indent}int x_${i}E = x_${i}B + ${this.kernelShape[i-2]} * ${this.strides[i-2]};`);
+          codeLines.push(`${indent}int x_${i}E = x_${i}B + ${this.kernelShape[i-2]};`);
           codeLines.push(`${indent}if (x_${i}B < 0) {`);
-          codeLines.push(`${indent}    ${snippetOnZero};`);
-          codeLines.push(`${indent}    x_${i}B += int(ceil(float(0 - x_${i}B) / float(${this.strides[i-2]}))) * ${this.strides[i-2]};`);
+          codeLines.push(`${indent}    x_${i}B = 0; ${snippetOnPadding}`);
           codeLines.push(`${indent}}`);
-          codeLines.push(`${indent}if (x_${i}E - ${this.strides[i-2]} >= ${xSpatialShape[i-2]}) {`);
-          codeLines.push(`${indent}    ${snippetOnZero}`);
-          codeLines.push(`${indent}    x_${i}E -= int(ceil(float(x_${i}E - ${this.kernelShape[i-2]}) / float(${this.strides[i-2]}))) * ${this.strides[i-2]};`);
+          codeLines.push(`${indent}if (x_${i}E > ${xSpatialShape[i-2]}) {`);
+          codeLines.push(`${indent}    x_${i}E = ${xSpatialShape[i-2]}; ${snippetOnPadding}`);
           codeLines.push(`${indent}}`);
-          codeLines.push(`${indent}count *= int((x_${i}E - x_${i}B) / ${this.strides[i-2]});`);
-          codeLines.push(`${indent}for (int x_${i} = x_${i}B; x_${i} < x_${i}E; x_${i} += ${this.strides[i-2]}) {`);
-          indent += '    ';
+          if (this.poolingType == 'average'&& !this.countIncludePadding) {
+              codeLines.push(`${indent}count *= (x_${i}E > x_${i}B) ? (x_${i}E - x_${i}B) : 0;`);
+          }
+        }
+
+        codeLines.push(``);
+        for (let i = 2; i < rank; ++i) {
+            codeLines.push(`${indent}for (int x_${i} = x_${i}B; x_${i} < x_${i}E; ++x_${i}) {`);
+            indent += '    ';
         }
         codeLines.push(`${indent}float valX = getX(${GlslCodeUtil.argList(rank, 'x_')});`);
         codeLines.push(`${indent}${snippetOnValue}`);
-    
         for (let i = rank - 1; i >= 2; --i) {
           indent = indent.substring(4);
           codeLines.push(`${indent}}`);
@@ -91,6 +98,10 @@ export class WebGlPoolingOp extends WebGlBaseProgram {
 
         const avgSnippet = (this.poolingType == 'max') ? '' : 
                     (this.countIncludePadding) ? `r = r / float(${kernelPointCount});` : `r = r / float(count);`;
+
+        //////////////////////////////////////////////////////////////////////////////////
+        // Following is the whole fragment shader code
+        //////////////////////////////////////////////////////////////////////////////////
         const fsCode =  `${this.generateFragShaderHead(this.poolingType + 'Pooling')}
 
 void main() {
@@ -100,7 +111,6 @@ void main() {
     int x_1 = y_1;
 
     float r = ${initValueSnippet};
-    int count = 1;
 
     ${snippetMainLoop}
 
@@ -109,6 +119,7 @@ void main() {
     outColor = vec4(r, 0.0, 0.0, 0.0);
 }
 `;
+    console.log(fsCode);
     return fsCode;
     }
 

@@ -33,16 +33,18 @@ const exp = ENV.engine.backend.exp.bind(ENV.engine.backend);
 const sum = ENV.engine.backend.sum.bind(ENV.engine.backend);
 const logSumExp =  ENV.engine.backend.logSumExp.bind(ENV.engine.backend);
  
-
 // static Tensor methods
 const tensor = Tensor.create;
+const range = Tensor.range;
+const oneHot = Tensor.oneHot;
+const scala = Tensor.scala;
 const randomNorm = Tensor.randomNorm;
 const randomUniform = Tensor.randomUniform;
 const truncatedNorm = Tensor.truncatedNorm;
 
 export {
     // Create or initialize...
-    tensor, randomNorm, randomUniform, truncatedNorm,
+    tensor, randomNorm, randomUniform, truncatedNorm, range, oneHot, scala,
     
     read,
 

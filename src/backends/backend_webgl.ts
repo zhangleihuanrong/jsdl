@@ -287,7 +287,6 @@ class WebGLBackend implements Backend {
     const pool = new WebGlPoolingOp(this.webgl, poolingType, x, kernelShape, strides, pads, countIncludePadding);
     return pool.run();
   }
-
   maxPool(x: Tensor, kernelShape: number[], strides: number[], pads: number[], storageOrder: number): Tensor {
     const bt = this.pooling_bk('max', backendTensorOf(x), kernelShape, strides, pads, false);
     return Tensor.fromBackend(bt);

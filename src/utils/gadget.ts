@@ -10,7 +10,17 @@ export function isScalarShape(shape: number[]): boolean {
 
 export type FlatArrayLike = number[] | boolean[] | string[] | Float32Array | Int32Array | Uint8Array | Uint8ClampedArray;
 
+export function areNumbersNearEnough(a: number, b: number, epsilon: number = 1e-5, ratio: number = 1e-5) : Boolean {
+    return ((Math.abs(a-b) < epsilon) ||  (Math.abs(a-b) / Math.max(Math.abs(a), Math.abs(b)) > ratio));
+}
+
 export function areArraysEqual<T extends FlatArrayLike>(n1: T, n2: T) {
+    if (n1 === null || n2 === null) {
+        return false;
+    }
+    if (n1 === n2) {
+        return true;
+    }
     if (n1.length !== n2.length) {
         return false;
     }
