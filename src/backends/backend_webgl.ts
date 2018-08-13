@@ -15,6 +15,7 @@ import { WebGLBinaryOp, WebGLBinaryOpType } from './webgl/arithmetic';
 import { WebGlReshapeOp } from './webgl/reshape';
 import { WebGlOpBatchNormalize } from './webgl/batchNormalize';
 import { PoolingType, WebGlPoolingOp } from './webgl/pooling';
+import { WebGlGemmOp } from './webgl/gemm';
 
 export class WebGLTensor implements BackendTensor {
   _dtype: DataType;
@@ -296,8 +297,18 @@ class WebGLBackend implements Backend {
     return Tensor.fromBackend(bt);
   }
   gemm(a: Tensor, b: Tensor, bias?: Tensor, alpha?: number, beta?: number, transposeA?: boolean, transposeB?: boolean): Tensor {
-    throw new Error("Method not implemented.");
+    transposeB = transposeB || false;
+    transposeA = transposeA || false;
+    beta = beta || 1.0;
+    alpha = alpha || 1.0;
+    bias = bias || null;
+    return Tensor.fromBackend(this.gemm_bk(backendTensorOf(a), backendTensorOf(b), backendTensorOf(bias), alpha, beta, transposeA, transposeB));
   }
+  gemm_bk(a: WebGLTensor, b: WebGLTensor, bias: WebGLTensor, alpha: number, beta: number, transposeA: boolean, transposeB: boolean): WebGLTensor {
+    const gemm = new WebGlGemmOp(this.webgl, a, b, bias, alpha, beta, transposeA, transposeB);
+    return gemm.run();
+  }
+
   
   softmax(logits: Tensor, axis?: number): Tensor {
     return Tensor.fromBackend(this.softmax_bk(backendTensorOf(logits), axis));

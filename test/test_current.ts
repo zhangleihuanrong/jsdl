@@ -1,59 +1,20 @@
 import { assert } from 'chai';
 
 import * as tf from '../src';
-import { areArraysEqual } from '../src/utils/gadget';
+import { areArraysEqual, areArraysNearEnough } from '../src/utils/gadget';
 
-describe("Pooling Operators", function() {
-    it("Max Pooling 4x4 pool with 2x2, strides 2x2", function() {
-        const X = tf.reshape(tf.range(0, 16, 1.0, 'float32'), [1, 1, 4, 4]).setName('X');
-        tf.print(X);
-        const mp = tf.maxPool(X, [2, 2], [2, 2], [0, 0, 0, 0], 1).setName('MaxPoolResult');
-        tf.print(mp);
-        assert(areArraysEqual(mp.shape, [1, 1, 2, 2]), "result shape error!");
-        assert(areArraysEqual(tf.read(mp), [5, 7, 13, 15]), "result value error!");
+describe("Gemm Operators", function() {
+    it("Gemm pool with 2x2, strides 2x2", function() {
+        const a = tf.reshape(tf.range(0, 15, 1.0, 'float32'), [3, 5]).setName('a');
+        tf.print(a);
+        const b = tf.tensor(new Array(10).fill(1.0), [5, 2]).setName('b');
+        tf.print(b);
+        const bias = tf.tensor([0.5, 0.75], [2]).setName('bias');
+        tf.print(bias);
+        const gemm = tf.gemm(a, b, bias).setName('GemmResult');
+        tf.print(gemm);
+        assert(areArraysEqual(gemm.shape, [3, 2]), "result shape error!");
+        assert(areArraysNearEnough(tf.read(gemm), [10.5, 10.75, 35.5, 35.75, 60.5, 60.75]), "result value error!");
     });
-
-    it("Max Pooling 4x4 pool with 2x2, strides 2x2, paddding 1", function() {
-        const X = tf.reshape(tf.range(1, 17, 1.0, 'float32'), [1, 1, 4, 4]).setName('X');
-        tf.print(X);
-        const mp = tf.maxPool(X, [2, 2], [2, 2], [1, 1, 1, 1], 1).setName('MaxPoolResult');
-        tf.print(mp);
-        assert(areArraysEqual(mp.shape, [1, 1, 3, 3]), "result shape error!");
-        assert(areArraysEqual(tf.read(mp), [1, 3, 4, 9, 11, 12, 13, 15, 16]), "result value error!");
-    });
-
-    it("Average Pooling 4x4 pool with 2x2, strides 2x2", function() {
-        const X = tf.reshape(tf.range(0, 16, 1.0, 'float32'), [1, 1, 4, 4]).setName('X');
-        tf.print(X);
-
-        const mp = tf.averagePool(X, [2, 2], [2, 2], [0, 0, 0, 0], 1).setName('AvgPoolResult');
-        tf.print(mp);
-
-        assert(areArraysEqual(mp.shape, [1, 1, 2, 2]), "result shape error!");
-        assert(areArraysEqual(tf.read(mp), [2.5, 4.5, 10.5, 12.5]), "result value error!");
-    });
-
-    it("Average Pooling 4x4 pool with 2x2, strides 2x2, padding 1", function() {
-        const X = tf.reshape(tf.range(1, 17, 1.0, 'float32'), [1, 1, 4, 4]).setName('X');
-        tf.print(X);
-
-        const mp = tf.averagePool(X, [2, 2], [2, 2], [1, 1, 1 , 1], 1).setName('AvgPoolResult');
-        tf.print(mp);
-
-        assert(areArraysEqual(mp.shape, [1, 1, 3, 3]), "result shape error!");
-        assert(areArraysEqual(tf.read(mp), [0.25, 1.25, 1, 3.5, 8.5, 5, 3.25, 7.25, 4]), "result value error!");
-    });
-
-    it("Average Pooling 4x4 pool with 2x2, strides 2x2, padding 1, count not include pad", function() {
-        const X = tf.reshape(tf.range(1, 17, 1.0, 'float32'), [1, 1, 4, 4]).setName('X');
-        tf.print(X);
-
-        const mp = tf.averagePool(X, [2, 2], [2, 2], [1, 1, 1 , 1], 0).setName('AvgPoolResult');
-        tf.print(mp);
-
-        assert(areArraysEqual(mp.shape, [1, 1, 3, 3]), "result shape error!");
-        assert(areArraysEqual(tf.read(mp), [1, 2.5, 4, 7, 8.5, 10, 13, 14.5, 16]), "result value error!");
-    });
-
 });
 

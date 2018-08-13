@@ -11,7 +11,7 @@ export function isScalarShape(shape: number[]): boolean {
 export type FlatArrayLike = number[] | boolean[] | string[] | Float32Array | Int32Array | Uint8Array | Uint8ClampedArray;
 
 export function areNumbersNearEnough(a: number, b: number, epsilon: number = 1e-5, ratio: number = 1e-5) : Boolean {
-    return ((Math.abs(a-b) < epsilon) ||  (Math.abs(a-b) / Math.max(Math.abs(a), Math.abs(b)) > ratio));
+    return ((Math.abs(a-b) < epsilon) ||  (Math.abs(a-b) / Math.max(Math.abs(a), Math.abs(b)) < ratio));
 }
 
 export function areArraysEqual<T extends FlatArrayLike>(n1: T, n2: T) {
@@ -32,6 +32,23 @@ export function areArraysEqual<T extends FlatArrayLike>(n1: T, n2: T) {
     return true;
 }
 
+export function areArraysNearEnough<T extends FlatArrayLike>(n1: T, n2: T, epsilon: number=1e-4, ratio : number=1e-4) {
+    if (n1 === null || n2 === null) {
+        return false;
+    }
+    if (n1 === n2) {
+        return true;
+    }
+    if (n1.length !== n2.length) {
+        return false;
+    }
+    for (let i = 0; i < n1.length; i++) {
+        if (!areNumbersNearEnough(n1[i] as number, n2[i] as number)) {
+            return false;
+        }
+    }
+    return true;
+}
 
 export function simpleHash32(s: string) : number {
     let hash = 0;
