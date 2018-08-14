@@ -1,0 +1,21 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>Resnet50 Demo (using onnx model file)</title>
+</head>
+
+<body>
+    <div><button>Load Model</button>Load model at </div>
+    <canvas id="canvas" width="600" height="600"></canvas>
+    <script>
+        window.onload = function () {
+            setupContext();
+            initShaders();
+            getUniforms();
+            loadTexture();
+        }
+    </script>
+</body>
+<html>
